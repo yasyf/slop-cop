@@ -1,0 +1,28 @@
+# Build output
+/slop-cop
+/dist/
+/bin/
+
+# Test + coverage
+*.test
+*.out
+coverage.*
+
+# Go
+vendor/
+
+# Env + local
+.env
+.env.*
+*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.swp
+*.swo
+
+# Cursor
+.cursor/

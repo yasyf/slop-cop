@@ -1,0 +1,135 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to build (e.g. v0.1.0). Leave blank to build without publishing.'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            ext: .exe
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve version metadata
+        id: meta
+        shell: bash
+        run: |
+          tag="${{ github.event.inputs.tag }}"
+          if [ -z "$tag" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          if [ -z "$tag" ]; then
+            tag="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        shell: bash
+        run: |
+          outdir="dist/slop-cop_${{ steps.meta.outputs.tag }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          mkdir -p "$outdir"
+          go build -trimpath \
+            -ldflags "-s -w \
+              -X main.version=${{ steps.meta.outputs.tag }} \
+              -X main.commit=${{ steps.meta.outputs.commit }}" \
+            -o "$outdir/slop-cop${{ matrix.ext }}" \
+            ./cmd/slop-cop
+          cp LICENSE NOTICE README.md "$outdir/"
+
+      - name: Package
+        shell: bash
+        run: |
+          cd dist
+          base="slop-cop_${{ steps.meta.outputs.tag }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -9 -r "${base}.zip" "${base}"
+          else
+            tar -czf "${base}.tar.gz" "${base}"
+          fi
+          sha256sum "${base}".* > "${base}.sha256"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slop-cop_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Aggregate checksums
+        shell: bash
+        run: |
+          cd dist
+          ls -la
+          cat *.sha256 > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          fail_on_unmatched_files: true

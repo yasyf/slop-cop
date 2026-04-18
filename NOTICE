@@ -1,0 +1,68 @@
+slop-cop (Go port)
+==================
+
+This project is a Go port of the detection core of:
+
+    awnist/slop-cop
+    https://github.com/awnist/slop-cop
+    AI text slop detection, 100% in browser
+
+The Go source code, build system, CLI interface, tests, and documentation in
+this repository are original works released under the MIT License (see
+LICENSE).
+
+Upstream attribution
+--------------------
+
+The pattern taxonomy, rule catalogue (rule IDs, names, descriptions, tips,
+colours, LLM prompts and directives, detection hints), detector algorithms,
+and word lists in the following files are derived from awnist/slop-cop:
+
+    internal/rules/rules.go            (src/rules.ts)
+    internal/detectors/word_patterns.go (src/detectors/wordPatterns.ts)
+    internal/detectors/detectors.go    (src/detectors/index.ts)
+    internal/detectors/helpers.go      (src/detectors/wordPatterns.ts)
+    internal/llm/prompts.go            (src/detectors/llmDetectors.ts)
+    internal/llm/detectors.go          (src/detectors/llmDetectors.ts)
+    internal/llm/rewrite.go            (src/detectors/llmDetectors.ts)
+    internal/detectors/word_patterns_test.go (src/detectors/__tests__/wordPatterns.test.ts)
+
+At the time this port was made (April 2026), the awnist/slop-cop repository
+did not carry an explicit open-source licence. Its package.json declared
+`"private": true` and the GitHub repository metadata reported
+`"license": null`. Publishing code on GitHub does not, by itself, grant
+redistribution rights beyond those in GitHub's Terms of Service (viewing and
+forking on GitHub).
+
+If you intend to use this port in a context beyond personal use, testing, or
+contribution back to the upstream author, please contact the upstream author
+(@awnist) to clarify licensing for the derived taxonomy and content.
+
+Upstream-of-upstream
+--------------------
+
+awnist/slop-cop credits the following as sources for the original pattern
+taxonomy:
+
+  - LLM_PROSE_TELLS.md
+    https://git.eeqj.de/sneak/prompts/src/branch/main/prompts/LLM_PROSE_TELLS.md
+    MIT License, Copyright (c) 2026 sneak
+
+  - Wikipedia: Signs of AI Writing
+    https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+    CC BY-SA 4.0 (Wikipedia content licence)
+
+  - tropes.md
+    https://tropes.fyi/tropes-md
+
+Third-party Go dependencies
+---------------------------
+
+This binary links against the following third-party Go modules at runtime:
+
+  - github.com/spf13/cobra           — Apache-2.0
+  - github.com/spf13/pflag           — BSD-3-Clause
+  - github.com/inconshreveable/mousetrap — Apache-2.0
+
+Their licences apply to their respective source; see go.sum and the module
+caches for details.
