@@ -2,11 +2,11 @@
 
 A Go CLI that detects the rhetorical and structural tells of LLM-generated
 prose and emits a structured JSON report. Designed for automated agent
-consumption — not humans. No TUI, no highlighting, no interactive prompts.
+consumption, not humans. No TUI, no highlighting, no interactive prompts.
 
 Ships with a plug-and-play **skill** for Claude Code and Cursor: the agent
 runs `slop-cop` on its own prose drafts and silently revises before replying.
-The binary auto-installs on first use — no Go required.
+The binary auto-installs on first use, so Go is not required.
 
 ## Install the plugin (recommended)
 
@@ -44,7 +44,7 @@ Given any prose the agent is about to return, the skill:
 
 1. Resolves (or auto-downloads) the `slop-cop` binary inside the plugin.
 2. Pipes the draft through `slop-cop check -`, getting back a JSON list of
-   violations across 48 rules — overused intensifiers, filler adverbs,
+   violations across 48 rules: overused intensifiers, filler adverbs,
    em-dash abuse, negation pivots, metaphor crutches, throat-clearing,
    hedge stacks, and more.
 3. Revises and re-runs until the report is clean.
@@ -55,8 +55,8 @@ the exact instructions the agent receives.
 
 ## Direct CLI install (for CI + scripting)
 
-The plugin is the primary UI. If you want to invoke `slop-cop` directly —
-from scripts, CI, pre-commit hooks, or another tool — install the binary:
+The plugin is the primary UI. If you want to invoke `slop-cop` directly
+from scripts, CI, pre-commit hooks, or another tool, install the binary:
 
 ```bash
 # Prebuilt binary matching your platform
@@ -220,9 +220,9 @@ for the full pattern list, or run `slop-cop rules --pretty` locally.
 
 - Go CLI + plugin/skill for coding agents instead of a browser UI; no
   editor, no URL hash sync, no contenteditable.
-- LLM calls go through the `claude` CLI (subscription auth) rather than
+- LLM calls go through the `claude` CLI (subscription auth) instead of
   direct Anthropic API requests.
-- Offsets are UTF-8 byte indices rather than JavaScript UTF-16 units.
+- Offsets are UTF-8 byte indices, not JavaScript UTF-16 units.
 - `detectNegationPivot` reimplements the two-sentence backreference case
   by hand because Go's `regexp` (RE2) has no `\2`.
 

@@ -60,9 +60,9 @@ Third-party Go dependencies
 
 This binary links against the following third-party Go modules at runtime:
 
-  - github.com/spf13/cobra           — Apache-2.0
-  - github.com/spf13/pflag           — BSD-3-Clause
-  - github.com/inconshreveable/mousetrap — Apache-2.0
+  - github.com/spf13/cobra                (Apache-2.0)
+  - github.com/spf13/pflag                (BSD-3-Clause)
+  - github.com/inconshreveable/mousetrap  (Apache-2.0)
 
 Their licences apply to their respective source; see go.sum and the module
 caches for details.

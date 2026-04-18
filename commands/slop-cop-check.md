@@ -3,17 +3,17 @@ name: slop-cop-check
 description: "Run slop-cop over a file or the current selection and show the JSON violations report. Usage: /slop-cop-check [path]"
 ---
 
-# Slop Cop — manual check
+# Slop Cop: manual check
 
 Run `slop-cop check` over the target prose and summarise the findings. Does
-*not* rewrite the text — for a self-review + revise loop, rely on the
+*not* rewrite the text. For a self-review + revise loop, rely on the
 `slop-cop-prose` skill instead.
 
 ## Usage
 
-- `/slop-cop-check` — check the currently open file or the current selection.
-- `/slop-cop-check <path>` — check the file at `<path>`.
-- `/slop-cop-check -` — read the target text from stdin (useful for piping).
+- `/slop-cop-check`: check the currently open file or the current selection.
+- `/slop-cop-check <path>`: check the file at `<path>`.
+- `/slop-cop-check -`: read the target text from stdin (useful for piping).
 
 ## Instructions
 
