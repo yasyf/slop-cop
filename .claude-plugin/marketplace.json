@@ -1,0 +1,14 @@
+{
+  "name": "slop-cop",
+  "owner": {
+    "name": "Yasyf Mohamedali",
+    "url": "https://github.com/yasyf"
+  },
+  "plugins": [
+    {
+      "name": "slop-cop",
+      "source": "./",
+      "description": "Detect and fix LLM-generated prose tells in agent output."
+    }
+  ]
+}

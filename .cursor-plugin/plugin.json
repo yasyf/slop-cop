@@ -1,0 +1,21 @@
+{
+  "name": "slop-cop",
+  "displayName": "Slop Cop",
+  "version": "0.1.0",
+  "description": "Detect and fix LLM-generated prose tells via the slop-cop CLI.",
+  "author": {
+    "name": "Yasyf Mohamedali"
+  },
+  "homepage": "https://github.com/yasyf/slop-cop",
+  "repository": "https://github.com/yasyf/slop-cop",
+  "license": "MIT",
+  "keywords": [
+    "prose",
+    "writing",
+    "llm",
+    "editing",
+    "cli"
+  ],
+  "skills": "./skills/",
+  "commands": "./commands/"
+}

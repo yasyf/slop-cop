@@ -4,32 +4,72 @@ A Go CLI that detects the rhetorical and structural tells of LLM-generated
 prose and emits a structured JSON report. Designed for automated agent
 consumption — not humans. No TUI, no highlighting, no interactive prompts.
 
-This is a port of the detection core of
-[awnist/slop-cop](https://github.com/awnist/slop-cop), which is a
-browser-based editor by [@awnist](https://github.com/awnist). All of the
-pattern taxonomy and detector logic comes from that project; this port
-re-implements the 35 client-side detectors in Go and shells out to the
-[`claude`](https://www.anthropic.com/product) CLI for the optional
-semantic and document-level passes.
+Ships with a plug-and-play **skill** for Claude Code and Cursor: the agent
+runs `slop-cop` on its own prose drafts and silently revises before replying.
+The binary auto-installs on first use — no Go required.
 
-## Install
+## Install the plugin (recommended)
+
+Most people will use slop-cop through their coding agent. The skill activates
+whenever you ask the agent to write, edit, or polish prose (blog posts,
+docs, PR descriptions, commit messages, release notes, emails).
+
+### Claude Code
+
+```
+/plugin marketplace add yasyf/slop-cop
+/plugin install slop-cop@slop-cop
+```
+
+### Cursor
+
+Open the Plugins panel and install from Git URL:
+`https://github.com/yasyf/slop-cop`.
+
+### First use
+
+On the first draft the skill sees, it runs `scripts/install-binary.sh`
+(or `.ps1` on Windows) which downloads the right prebuilt binary for your
+platform from the rolling [`latest`](https://github.com/yasyf/slop-cop/releases/tag/latest)
+GitHub Release and drops it into the plugin directory. Subsequent runs
+reuse the cached binary. No Go toolchain required.
+
+Verify end-to-end with [`scripts/test-plugin.sh`](scripts/test-plugin.sh),
+which spawns a `claude -p` subshell with `--plugin-dir` pointed at a local
+checkout and asserts the skill activated.
+
+## What the skill does
+
+Given any prose the agent is about to return, the skill:
+
+1. Resolves (or auto-downloads) the `slop-cop` binary inside the plugin.
+2. Pipes the draft through `slop-cop check -`, getting back a JSON list of
+   violations across 48 rules — overused intensifiers, filler adverbs,
+   em-dash abuse, negation pivots, metaphor crutches, throat-clearing,
+   hedge stacks, and more.
+3. Revises and re-runs until the report is clean.
+4. Returns the revised draft to you, without narrating the process.
+
+See [`skills/slop-cop-prose/SKILL.md`](skills/slop-cop-prose/SKILL.md) for
+the exact instructions the agent receives.
+
+## Direct CLI install (for CI + scripting)
+
+The plugin is the primary UI. If you want to invoke `slop-cop` directly —
+from scripts, CI, pre-commit hooks, or another tool — install the binary:
 
 ```bash
+# Prebuilt binary matching your platform
+curl -fsSL "https://github.com/yasyf/slop-cop/releases/download/latest/slop-cop_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
+  | tar -xz -C /tmp && sudo mv /tmp/slop-cop_*/slop-cop /usr/local/bin/
+
+# Or from source
 go install github.com/yasyf/slop-cop/cmd/slop-cop@latest
 ```
 
-Or build from source:
-
-```bash
-git clone https://github.com/yasyf/slop-cop
-cd slop-cop
-go build -o slop-cop ./cmd/slop-cop
-```
-
-Requires Go 1.26+ (the repo pins `1.26.2` via `.tool-versions` for asdf).
-The optional `--llm` / `--llm-deep` and `rewrite` modes
-additionally require the [`claude`](https://docs.claude.com/en/docs/claude-code/overview)
-CLI on `$PATH`; slop-cop never needs an Anthropic API key of its own because
+The `--llm` / `--llm-deep` and `rewrite` modes additionally require the
+[`claude`](https://docs.claude.com/en/docs/claude-code/overview) CLI on
+`$PATH`; slop-cop never needs an Anthropic API key of its own because
 `claude -p` uses your Claude subscription.
 
 ## Usage
@@ -92,16 +132,16 @@ Example output (trimmed):
 
 Flags:
 
-| Flag                   | Default                       | Purpose                                         |
-| ---------------------- | ----------------------------- | ----------------------------------------------- |
-| `--llm`                | off                           | Sentence-tier semantic pass (Claude Haiku)      |
-| `--llm-deep`           | off                           | Document-tier structural pass (Claude Sonnet)   |
-| `--claude-bin`         | `claude`                      | Path to the `claude` CLI                        |
-| `--sentence-model`     | `claude-haiku-4-5-20251001`   | Model slug for `--llm`                          |
-| `--document-model`     | `claude-sonnet-4-6`           | Model slug for `--llm-deep`                     |
-| `--sentence-timeout`   | `30s`                         | Timeout per sentence-pass chunk                 |
-| `--document-timeout`   | `60s`                         | Timeout for the document pass                   |
-| `--pretty`             | off                           | Indent JSON output                              |
+| Flag                 | Default                     | Purpose                                       |
+| -------------------- | --------------------------- | --------------------------------------------- |
+| `--llm`              | off                         | Sentence-tier semantic pass (Claude Haiku)    |
+| `--llm-deep`         | off                         | Document-tier structural pass (Claude Sonnet) |
+| `--claude-bin`       | `claude`                    | Path to the `claude` CLI                      |
+| `--sentence-model`   | `claude-haiku-4-5-20251001` | Model slug for `--llm`                        |
+| `--document-model`   | `claude-sonnet-4-6`         | Model slug for `--llm-deep`                   |
+| `--sentence-timeout` | `30s`                       | Timeout per sentence-pass chunk               |
+| `--document-timeout` | `60s`                       | Timeout for the document pass                 |
+| `--pretty`           | off                         | Indent JSON output                            |
 
 ### `rewrite`
 
@@ -178,17 +218,46 @@ for the full pattern list, or run `slop-cop rules --pretty` locally.
 
 ## Differences from the upstream
 
-- Go CLI instead of a browser UI; no editor, no URL hash sync, no
-  contenteditable.
+- Go CLI + plugin/skill for coding agents instead of a browser UI; no
+  editor, no URL hash sync, no contenteditable.
 - LLM calls go through the `claude` CLI (subscription auth) rather than
   direct Anthropic API requests.
 - Offsets are UTF-8 byte indices rather than JavaScript UTF-16 units.
-- `detectNegationPivot` reimplements the two-sentence backreference
-  case by hand because Go's `regexp` (RE2) has no `\2`.
+- `detectNegationPivot` reimplements the two-sentence backreference case
+  by hand because Go's `regexp` (RE2) has no `\2`.
 
-All other detection logic is a 1:1 port; the 196 subtests in
+All other detection logic is a 1:1 port; the 201 subtests in
 [`internal/detectors/word_patterns_test.go`](internal/detectors/word_patterns_test.go)
 mirror the original Vitest suite.
+
+## Repo layout
+
+```
+.claude-plugin/          Claude Code plugin + marketplace manifests
+.cursor-plugin/          Cursor plugin manifest
+skills/slop-cop-prose/   The prose-writing skill agents activate
+commands/                /slop-cop-check slash command
+scripts/
+  install-binary.sh      First-run binary bootstrap for the plugin (bash)
+  install-binary.ps1     Same, for Windows (PowerShell)
+  test-plugin.sh         Local end-to-end plugin test via `claude -p`
+cmd/slop-cop/            CLI entry point
+internal/                Detectors, rules, types, LLM subprocess wrapper
+```
+
+## Release model
+
+`main` is the release. Every push to `main` triggers
+[release.yml](.github/workflows/release.yml), which cross-compiles for
+linux/darwin/windows/freebsd × amd64/arm64 and upserts a single moving
+`latest` GitHub Release. Asset URLs are stable:
+
+```
+https://github.com/yasyf/slop-cop/releases/download/latest/slop-cop_<os>_<arch>.tar.gz
+```
+
+No tags, no versioned releases. If you need a reproducible install, pin to
+a specific commit SHA via `go install` on a module-proxy-backed path.
 
 ## Development
 
@@ -204,18 +273,23 @@ go build ./...
 
 ## License & credit
 
-The Go source in this repository (the CLI, subprocess plumbing, build
-system, documentation, tests) is released under the [MIT License](LICENSE).
+The Go source in this repository (the CLI, plugin manifests, skill
+authoring, subprocess plumbing, build system, documentation, tests) is
+released under the [MIT License](LICENSE).
 
 The pattern taxonomy, rule catalogue, detector algorithms, word lists, and
-LLM prompts are derived from [awnist/slop-cop](https://github.com/awnist/slop-cop)
-by [@awnist](https://github.com/awnist). At the time this port was made,
-that upstream repository carried no open-source licence; see
-[NOTICE](NOTICE) for the full provenance, attribution, and compliance
-guidance. If you plan to use this tool beyond personal use or contributions
-back to the upstream author, please reach out to @awnist to clarify
-licensing of the derived content.
+LLM prompts are derived from
+[awnist/slop-cop](https://github.com/awnist/slop-cop) by
+[@awnist](https://github.com/awnist). At the time this port was made, that
+upstream repository carried no open-source licence; see [NOTICE](NOTICE) for
+the full provenance, attribution, and compliance guidance. If you plan to
+use this tool beyond personal use or contributions back to the upstream
+author, please reach out to @awnist to clarify licensing of the derived
+content.
 
-Original source rules: [LLM_PROSE_TELLS.md](https://git.eeqj.de/sneak/prompts/src/branch/main/prompts/LLM_PROSE_TELLS.md) (MIT, © sneak),
-[Wikipedia: Signs of AI Writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing) (CC BY-SA 4.0),
+Original source rules:
+[LLM_PROSE_TELLS.md](https://git.eeqj.de/sneak/prompts/src/branch/main/prompts/LLM_PROSE_TELLS.md)
+(MIT, © sneak),
+[Wikipedia: Signs of AI Writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing)
+(CC BY-SA 4.0),
 [tropes.md](https://tropes.fyi/tropes-md).

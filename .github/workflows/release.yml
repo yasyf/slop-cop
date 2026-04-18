@@ -2,12 +2,8 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Version tag to build (e.g. v0.1.0). Leave blank to build without publishing.'
-        required: false
 
 permissions:
   contents: write
@@ -43,25 +39,16 @@ jobs:
           - goos: freebsd
             goarch: arm64
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Resolve version metadata
+      - name: Resolve commit
         id: meta
         shell: bash
-        run: |
-          tag="${{ github.event.inputs.tag }}"
-          if [ -z "$tag" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            tag="${GITHUB_REF#refs/tags/}"
-          fi
-          if [ -z "$tag" ]; then
-            tag="dev-$(git rev-parse --short HEAD)"
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build
         env:
@@ -70,11 +57,11 @@ jobs:
           CGO_ENABLED: '0'
         shell: bash
         run: |
-          outdir="dist/slop-cop_${{ steps.meta.outputs.tag }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          outdir="dist/slop-cop_${{ matrix.goos }}_${{ matrix.goarch }}"
           mkdir -p "$outdir"
           go build -trimpath \
             -ldflags "-s -w \
-              -X main.version=${{ steps.meta.outputs.tag }} \
+              -X main.version=latest \
               -X main.commit=${{ steps.meta.outputs.commit }}" \
             -o "$outdir/slop-cop${{ matrix.ext }}" \
             ./cmd/slop-cop
@@ -84,7 +71,7 @@ jobs:
         shell: bash
         run: |
           cd dist
-          base="slop-cop_${{ steps.meta.outputs.tag }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          base="slop-cop_${{ matrix.goos }}_${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             zip -9 -r "${base}.zip" "${base}"
           else
@@ -93,7 +80,7 @@ jobs:
           sha256sum "${base}".* > "${base}.sha256"
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: slop-cop_${{ matrix.goos }}_${{ matrix.goarch }}
           path: |
@@ -104,14 +91,13 @@ jobs:
           retention-days: 14
 
   release:
-    name: publish release
+    name: publish rolling `latest`
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: dist
           merge-multiple: true
@@ -124,12 +110,18 @@ jobs:
           cat *.sha256 > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Publish `latest` release
+        uses: softprops/action-gh-release@v3
         with:
+          tag_name: latest
+          name: latest
+          body: |
+            Rolling release built from the current tip of `main` (commit `${{ github.sha }}`).
+            Assets are replaced in place on every push; URLs are stable.
+          prerelease: true
+          make_latest: false
           files: |
             dist/*.tar.gz
             dist/*.zip
             dist/SHA256SUMS.txt
-          generate_release_notes: true
           fail_on_unmatched_files: true

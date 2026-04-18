@@ -1,0 +1,11 @@
+{
+  "name": "slop-cop",
+  "description": "Detect and fix LLM-generated prose tells via the slop-cop CLI. Ships a self-review skill for the agent and bootstraps the binary on first use.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Yasyf Mohamedali",
+    "url": "https://github.com/yasyf"
+  },
+  "homepage": "https://github.com/yasyf/slop-cop",
+  "license": "MIT"
+}
