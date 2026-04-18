@@ -1,0 +1,13 @@
+# Keep test fixtures in LF so byte offsets in goldens match cross-platform.
+internal/markdown/testdata/** text eol=lf
+internal/markdown/testdata/*.golden text eol=lf
+
+# Standard text files as LF too.
+*.go          text eol=lf
+*.md          text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+*.json        text eol=lf
+*.sh          text eol=lf
+go.mod        text eol=lf
+go.sum        text eol=lf

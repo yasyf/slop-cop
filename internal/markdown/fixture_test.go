@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"os"
@@ -23,10 +24,14 @@ func TestAnalyze_Fixture(t *testing.T) {
 	fixturePath := filepath.Join("testdata", "fixture.md")
 	goldenPath := filepath.Join("testdata", "fixture.md.golden")
 
-	src, err := os.ReadFile(fixturePath)
+	raw, err := os.ReadFile(fixturePath)
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
+	// Normalise CRLF → LF so byte offsets stay stable across git autocrlf
+	// settings (e.g. Windows CI). .gitattributes also pins testdata to LF,
+	// but this defends against future drift.
+	src := bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
 
 	masked, suppress, fm := Analyze(string(src))
 	assertInvariants(t, string(src), masked, suppress, fm)
@@ -60,6 +65,7 @@ func TestAnalyze_Fixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read golden (run with -update to create): %v", err)
 	}
+	want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
 	if string(out) != string(want) {
 		t.Fatalf("fixture output drift; re-run with -update if intentional.\n--- got ---\n%s\n--- want ---\n%s", out, want)
 	}
