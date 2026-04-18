@@ -26,3 +26,9 @@ vendor/
 
 # Cursor
 .cursor/
+
+# Agent memory dirs (Serena etc.)
+.serena/
+
+# Bootstrap output of the plugin test; regenerated on demand
+/bin/

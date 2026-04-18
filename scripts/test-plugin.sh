@@ -28,6 +28,11 @@ EOF
 stream=$(mktemp)
 trap 'rm -f "$stream"' EXIT
 
+# `claude -p --plugin-dir <path>` does not propagate CLAUDE_PLUGIN_ROOT to
+# bash tool shells (empirically verified). The `/plugin install` flow does.
+# Export it here so the test mirrors the real runtime environment.
+export CLAUDE_PLUGIN_ROOT="$PWD"
+
 echo "--> claude -p --plugin-dir \"$PWD\" ..."
 claude -p \
   --plugin-dir "$PWD" \
@@ -38,23 +43,19 @@ claude -p \
 
 echo "--> stream size: $(wc -c < "$stream") bytes"
 
-if [ ! -x bin/slop-cop ]; then
-  echo "FAIL: bootstrap installer did not produce bin/slop-cop" >&2
+if ! grep -qE '"command":"[^"]*slop-cop' "$stream"; then
+  echo "FAIL: no Bash tool call invoked slop-cop" >&2
   echo "--- tail of stream ---" >&2
   tail -c 4000 "$stream" >&2 || true
   exit 1
 fi
 
-if ! grep -q 'slop-cop' "$stream"; then
-  echo "FAIL: skill did not reference slop-cop anywhere in the run" >&2
+if [ ! -x bin/slop-cop ]; then
+  echo "FAIL: bootstrap installer did not produce bin/slop-cop" >&2
   tail -c 4000 "$stream" >&2 || true
   exit 1
 fi
 
-if ! grep -qE '"command"[^}]*slop-cop' "$stream"; then
-  echo "FAIL: no Bash tool call invoked slop-cop" >&2
-  tail -c 4000 "$stream" >&2 || true
-  exit 1
-fi
+"$PWD/bin/slop-cop" version --pretty || { echo "FAIL: installed slop-cop cannot run" >&2; exit 1; }
 
 echo "PASS: bootstrap installed bin/slop-cop and the skill invoked it"

@@ -31,32 +31,38 @@ Do **not** run it on:
 
 ## Resolving the binary
 
-The binary lives at `${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}/bin/slop-cop`
-(or `slop-cop.exe` on Windows). If that path does not exist yet, run the
-bootstrap installer *once* — it downloads the right binary for the current
-host from GitHub Releases:
+Before every run of the skill, evaluate these three options in order and
+use the first one that works:
 
 ```bash
-# macOS / Linux / FreeBSD:
-bash "${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT}}/scripts/install-binary.sh"
-
-# Windows (PowerShell):
-pwsh "$env:CLAUDE_PLUGIN_ROOT\scripts\install-binary.ps1"
-# or: powershell -File "$env:CLAUDE_PLUGIN_ROOT\scripts\install-binary.ps1"
+# 1. Pre-installed on PATH (CI, scripting, or the user already has it).
+if command -v slop-cop >/dev/null 2>&1; then
+  SLOP_COP=slop-cop
+# 2. Bundled inside the plugin (normal install path).
+elif [ -x "${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}/bin/slop-cop" ]; then
+  SLOP_COP="${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT}}/bin/slop-cop"
+# 3. First run: bootstrap the binary into the plugin dir, then use it.
+else
+  PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}"
+  bash "${PLUGIN_ROOT}/scripts/install-binary.sh"
+  SLOP_COP="${PLUGIN_ROOT}/bin/slop-cop"
+fi
 ```
 
-The installer is idempotent — a no-op when the binary is already present.
+On Windows replace the final step with
+`pwsh "$env:CLAUDE_PLUGIN_ROOT\scripts\install-binary.ps1"` (or
+`powershell -File ...`) and point `SLOP_COP` at `bin\slop-cop.exe`.
 
-If both `CLAUDE_PLUGIN_ROOT` and `CURSOR_PLUGIN_ROOT` are unset (for example,
-the skill is being invoked outside either product), fall back to `slop-cop`
-on `$PATH`.
+The installer is idempotent — a no-op when the binary is already present,
+so calling it on every skill invocation is safe but wasteful. Prefer the
+pre-check above.
 
-After resolving the path, store it so the rest of the skill can refer to it:
-
-```bash
-SLOP_COP="${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}/bin/slop-cop"
-[ -x "$SLOP_COP" ] || SLOP_COP=slop-cop
-```
+If *both* `CLAUDE_PLUGIN_ROOT` and `CURSOR_PLUGIN_ROOT` are unset and
+`slop-cop` is not on `$PATH` (rare: running the skill outside both products
+and without a prior install), infer the plugin root from this SKILL.md's
+location: the plugin root is the directory two levels above this file
+(`skills/slop-cop-prose/SKILL.md` → repo root). Then run
+`bash <plugin_root>/scripts/install-binary.sh` the same way.
 
 ## Loop
 
