@@ -1,0 +1,103 @@
+{
+  "violations": [
+    {
+      "ruleId": "overused-intensifiers",
+      "startIndex": 562,
+      "endIndex": 568,
+      "matchedText": "robust"
+    },
+    {
+      "ruleId": "colon-elaboration",
+      "startIndex": 516,
+      "endIndex": 517,
+      "matchedText": ":"
+    },
+    {
+      "ruleId": "colon-elaboration",
+      "startIndex": 649,
+      "endIndex": 650,
+      "matchedText": ":"
+    },
+    {
+      "ruleId": "colon-elaboration",
+      "startIndex": 701,
+      "endIndex": 702,
+      "matchedText": ":"
+    },
+    {
+      "ruleId": "colon-elaboration",
+      "startIndex": 1246,
+      "endIndex": 1247,
+      "matchedText": ":"
+    },
+    {
+      "ruleId": "staccato-burst",
+      "startIndex": 1172,
+      "endIndex": 1214,
+      "matchedText": "- First item.\n- Second item.\n- Third item.",
+      "explanation": "3 consecutive short sentences"
+    },
+    {
+      "ruleId": "staccato-burst",
+      "startIndex": 1216,
+      "endIndex": 1279,
+      "matchedText": "A real staccato burst in prose: it fires. it stays. it matters.",
+      "explanation": "3 consecutive short sentences"
+    },
+    {
+      "ruleId": "listicle-instinct",
+      "startIndex": 1170,
+      "endIndex": 1214,
+      "matchedText": "\n\n- First item.\n- Second item.\n- Third item.",
+      "explanation": "Bullet list with exactly 3 items"
+    },
+    {
+      "ruleId": "dramatic-fragment",
+      "startIndex": 221,
+      "endIndex": 244,
+      "matchedText": "## Setext-style heading"
+    },
+    {
+      "ruleId": "dramatic-fragment",
+      "startIndex": 246,
+      "endIndex": 278,
+      "matchedText": "The setext form\n================"
+    },
+    {
+      "ruleId": "dramatic-fragment",
+      "startIndex": 314,
+      "endIndex": 333,
+      "matchedText": "## Links and images"
+    },
+    {
+      "ruleId": "dramatic-fragment",
+      "startIndex": 641,
+      "endIndex": 694,
+      "matchedText": "Autolink:                               is available."
+    },
+    {
+      "ruleId": "dramatic-fragment",
+      "startIndex": 696,
+      "endIndex": 741,
+      "matchedText": "Image: ![alt text here]"
+    },
+    {
+      "ruleId": "dramatic-fragment",
+      "startIndex": 1151,
+      "endIndex": 1170,
+      "matchedText": "## Lists and bursts"
+    },
+    {
+      "ruleId": "dramatic-fragment",
+      "startIndex": 1281,
+      "endIndex": 1288,
+      "matchedText": "## HTML"
+    },
+    {
+      "ruleId": "dramatic-fragment",
+      "startIndex": 1395,
+      "endIndex": 1405,
+      "matchedText": "## Closing"
+    }
+  ]
+}

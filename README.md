@@ -132,16 +132,40 @@ Example output (trimmed):
 
 Flags:
 
-| Flag                 | Default                     | Purpose                                       |
-| -------------------- | --------------------------- | --------------------------------------------- |
-| `--llm`              | off                         | Sentence-tier semantic pass (Claude Haiku)    |
-| `--llm-deep`         | off                         | Document-tier structural pass (Claude Sonnet) |
-| `--claude-bin`       | `claude`                    | Path to the `claude` CLI                      |
-| `--sentence-model`   | `claude-haiku-4-5-20251001` | Model slug for `--llm`                        |
-| `--document-model`   | `claude-sonnet-4-6`         | Model slug for `--llm-deep`                   |
-| `--sentence-timeout` | `30s`                       | Timeout per sentence-pass chunk               |
-| `--document-timeout` | `60s`                       | Timeout for the document pass                 |
-| `--pretty`           | off                         | Indent JSON output                            |
+| Flag                 | Default                     | Purpose                                                                    |
+| -------------------- | --------------------------- | -------------------------------------------------------------------------- |
+| `--markdown`         | `auto`                      | `auto\|on\|off`. Auto enables markdown mode for `.md` / `.markdown` / `.mdx`. |
+| `--llm`              | off                         | Sentence-tier semantic pass (Claude Haiku)                                 |
+| `--llm-deep`         | off                         | Document-tier structural pass (Claude Sonnet)                              |
+| `--claude-bin`       | `claude`                    | Path to the `claude` CLI                                                   |
+| `--sentence-model`   | `claude-haiku-4-5-20251001` | Model slug for `--llm`                                                     |
+| `--document-model`   | `claude-sonnet-4-6`         | Model slug for `--llm-deep`                                                |
+| `--sentence-timeout` | `30s`                       | Timeout per sentence-pass chunk                                            |
+| `--document-timeout` | `60s`                       | Timeout for the document pass                                              |
+| `--pretty`           | off                         | Indent JSON output                                                         |
+
+### Markdown mode
+
+When active (auto-detected on `.md` / `.markdown` / `.mdx`, or forced via
+`--markdown=on`), `slop-cop check`:
+
+- **Masks non-prose bytes** before running detectors: fenced + indented
+  code blocks, inline code spans, link/image destinations, autolinks,
+  reference-definition lines, inline + block HTML, YAML front matter.
+  Detectors see ASCII spaces where these appeared, so `utilize` inside a
+  `` `code` `` span or a URL no longer fires `elevated-register`.
+- **Suppresses two structural false positives** via the parsed markdown
+  AST: `dramatic-fragment` on ATX/setext headings, and `staccato-burst`
+  that spans two or more consecutive list items (a bulleted list is not
+  prose cadence).
+- **Preserves byte offsets**. Violations still carry `startIndex` /
+  `endIndex` into the original input, and `matchedText` is re-sliced from
+  the original bytes. Consumers don't see the masking at all; they see an
+  accurate, cleaner report.
+
+Masking is a length-preserving, newline-preserving transform, so nothing
+else in the pipeline changes. Use `--markdown=off` on a `.md` file when you
+want to see every markdown-structure hit.
 
 ### `rewrite`
 

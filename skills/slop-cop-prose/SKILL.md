@@ -70,10 +70,16 @@ location: the plugin root is the directory two levels above this file
 
 2. **Check.** Pipe the draft on stdin:
    ```bash
-   printf '%s' "$DRAFT" | "$SLOP_COP" check -
+   printf '%s' "$DRAFT" | "$SLOP_COP" check --markdown -
    ```
    `slop-cop` prints a JSON document of shape
-   `{"text_length": N, "violations": [...], "counts_by_rule": {...}, "counts_by_category": {...}}`.
+   `{"text_length": N, "violations": [...], "counts_by_rule": {...}, "counts_by_category": {...}, "markdown": true}`.
+
+   Always pass `--markdown`. LLM drafts are typically markdown-shaped (code
+   fences, inline code, links, headings), and markdown mode masks those
+   non-prose regions so detectors only see the actual writing. It is a
+   no-op on plain prose. When checking a file path, `slop-cop check
+   article.md` already auto-activates markdown mode by extension.
 
 3. **Revise.** Walk the `violations` array, prioritising these high-signal
    rules first. The canonical fix for each:
