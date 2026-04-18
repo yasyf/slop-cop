@@ -8,10 +8,8 @@ import (
 	"github.com/yasyf/slop-cop/internal/types"
 )
 
-// These tests exercise the pieces the `check` command composes — the
-// resolveMarkdown decision, the applyMarkdownSuppressions post-filter, and
-// the offset invariant we expose to consumers — without spawning a child
-// process. The `check` RunE function drives these helpers directly.
+// Integration tests for the pieces the `check` command composes, exercised
+// without spawning a child process.
 
 func TestResolveMarkdown_Auto(t *testing.T) {
 	cases := []struct {
@@ -42,13 +40,17 @@ func TestResolveMarkdown_Auto(t *testing.T) {
 }
 
 func TestResolveMarkdown_Invalid(t *testing.T) {
-	if _, err := resolveMarkdown("maybe", ""); err == nil {
-		t.Fatalf("expected error for --markdown=maybe")
+	// "auto|on|off" are the only accepted values; aliases like "yes"/"true"
+	// would mask typos, so we require strict input.
+	for _, mode := range []string{"maybe", "yes", "true", "no", "false", "1", "0"} {
+		if _, err := resolveMarkdown(mode, ""); err == nil {
+			t.Fatalf("expected error for --markdown=%q", mode)
+		}
 	}
 }
 
-// TestCheckMarkdown_EndToEnd walks a realistic markdown document through
-// the same steps the `check` RunE does and asserts the markdown-mode
+// TestCheckMarkdown_EndToEnd walks a realistic markdown document through the
+// same steps the `check` RunE does and asserts the markdown-mode
 // suppressions fire and every returned violation carries an accurate
 // matchedText slice back into the original input.
 func TestCheckMarkdown_EndToEnd(t *testing.T) {
@@ -70,133 +72,62 @@ Another paragraph here that contains robust prose.
 
 ` + "```bash\nutilize this in code\n```\n"
 
-	// Plain mode: many markdown-structure hits.
-	plainViolations := detectors.RunClient(src)
-	plainHas := func(id string) bool {
-		for _, v := range plainViolations {
+	hasRule := func(vs []types.Violation, id string) bool {
+		for _, v := range vs {
 			if v.RuleID == id {
 				return true
 			}
 		}
 		return false
 	}
-	if !plainHas("dramatic-fragment") {
-		t.Fatalf("plain mode should fire dramatic-fragment on headings; got %+v", plainViolations)
+
+	// Plain mode: markdown structure should yield several false positives.
+	plain := detectors.RunClient(src)
+	if !hasRule(plain, "dramatic-fragment") {
+		t.Fatalf("plain mode should fire dramatic-fragment on headings; got %+v", plain)
 	}
-	if !plainHas("elevated-register") {
-		t.Fatalf("plain mode should fire elevated-register on the unmasked 'utilize' in code/URL")
+	if !hasRule(plain, "elevated-register") {
+		t.Fatalf("plain mode should fire elevated-register on the unmasked code/URL 'utilize'")
 	}
 
-	// Markdown mode: run detectors on the masked copy + apply suppressions.
+	// Markdown mode: mask + detect + suppress.
 	masked, suppress, _ := markdown.Analyze(src)
 	if len(masked) != len(src) {
 		t.Fatalf("markdown.Analyze broke length invariant: %d != %d", len(masked), len(src))
 	}
-	mdViolations := detectors.RunClient(masked)
-	mdViolations = applyMarkdownSuppressions(mdViolations, suppress, src)
+	got := markdown.ApplySuppressions(detectors.RunClient(masked), suppress, src)
 
-	// `utilize` should only survive on the heading ("# Heading With utilize")
-	// and any prose link-text contexts. Code span + URL + fenced block are
-	// masked; the ref-def / autolink cases are absent here.
-	elevatedHits := 0
-	for _, v := range mdViolations {
-		if v.RuleID == "elevated-register" {
-			elevatedHits++
-			// Each surviving hit must actually be on the word "utilize" in the
-			// original source (heading only in this fixture).
-			if v.MatchedText != "utilize" {
-				t.Fatalf("elevated-register matchedText = %q, want 'utilize'", v.MatchedText)
-			}
-			if src[v.StartIndex:v.EndIndex] != v.MatchedText {
-				t.Fatalf("offset invariant violated for %+v (src slice = %q)", v, src[v.StartIndex:v.EndIndex])
-			}
+	// `utilize` should survive only on the heading line (link URL, code span,
+	// and fenced block are all masked; no ref-def/autolink in this fixture).
+	elevated := 0
+	for _, v := range got {
+		if v.RuleID != "elevated-register" {
+			continue
+		}
+		elevated++
+		if v.MatchedText != "utilize" {
+			t.Fatalf("elevated-register matchedText = %q, want 'utilize'", v.MatchedText)
 		}
 	}
-	if elevatedHits == 0 {
-		t.Fatalf("expected at least one elevated-register hit (on the heading text), got none")
+	if elevated == 0 {
+		t.Fatalf("expected at least one elevated-register hit (on the heading text)")
 	}
 
-	// dramatic-fragment should be suppressed on the headings.
-	for _, v := range mdViolations {
-		if v.RuleID == "dramatic-fragment" {
-			// If any survive, ensure they don't overlap a heading.
-			if markdown.Overlaps(v.StartIndex, v.EndIndex, suppress, markdown.KindHeading) {
-				t.Fatalf("dramatic-fragment survived on a heading span: %+v", v)
-			}
-		}
-	}
-
-	// staccato-burst across the bulleted list should be suppressed.
-	for _, v := range mdViolations {
-		if v.RuleID == "staccato-burst" {
-			if markdown.CountOverlapping(v.StartIndex, v.EndIndex, suppress, markdown.KindListItem) >= 2 {
-				t.Fatalf("staccato-burst survived across list items: %+v", v)
-			}
-		}
-	}
-
-	// Offset invariant for every remaining violation.
-	for _, v := range mdViolations {
+	for _, v := range got {
+		// Offset invariant on every returned violation.
 		if v.StartIndex < 0 || v.EndIndex > len(src) || v.EndIndex < v.StartIndex {
 			t.Fatalf("violation %+v has out-of-range offsets for src length %d", v, len(src))
 		}
 		if src[v.StartIndex:v.EndIndex] != v.MatchedText {
 			t.Fatalf("offset invariant violated: %+v vs src slice %q", v, src[v.StartIndex:v.EndIndex])
 		}
-	}
-}
-
-// TestApplyMarkdownSuppressions_DropsDramaticFragmentOnHeadings constructs
-// synthetic inputs so the post-filter is exercised deterministically.
-func TestApplyMarkdownSuppressions_DropsDramaticFragmentOnHeadings(t *testing.T) {
-	vs := []types.Violation{
-		{RuleID: "dramatic-fragment", StartIndex: 0, EndIndex: 10, MatchedText: ""},
-		{RuleID: "overused-intensifiers", StartIndex: 12, EndIndex: 18, MatchedText: ""},
-	}
-	original := "## Heading\n\nrobust prose\n"
-	suppress := []markdown.Range{
-		{Start: 0, End: 10, Kind: markdown.KindHeading},
-	}
-	out := applyMarkdownSuppressions(vs, suppress, original)
-	if len(out) != 1 {
-		t.Fatalf("expected 1 surviving violation, got %d: %+v", len(out), out)
-	}
-	if out[0].RuleID != "overused-intensifiers" {
-		t.Fatalf("wrong survivor: %+v", out[0])
-	}
-	if out[0].MatchedText != "robust" {
-		t.Fatalf("matchedText re-slice failed: got %q", out[0].MatchedText)
-	}
-}
-
-func TestApplyMarkdownSuppressions_DropsStaccatoAcrossListItems(t *testing.T) {
-	// A staccato burst spanning three list items should be dropped.
-	vs := []types.Violation{
-		{RuleID: "staccato-burst", StartIndex: 0, EndIndex: 30, MatchedText: ""},
-	}
-	original := "- First item.\n- Second item.\n- Third item.\n"
-	suppress := []markdown.Range{
-		{Start: 0, End: 14, Kind: markdown.KindListItem},
-		{Start: 14, End: 29, Kind: markdown.KindListItem},
-		{Start: 29, End: 43, Kind: markdown.KindListItem},
-	}
-	out := applyMarkdownSuppressions(vs, suppress, original)
-	if len(out) != 0 {
-		t.Fatalf("expected staccato-burst to be dropped, got %+v", out)
-	}
-}
-
-func TestApplyMarkdownSuppressions_KeepsStaccatoInSingleItem(t *testing.T) {
-	// A staccato burst fully inside one list item is still real.
-	vs := []types.Violation{
-		{RuleID: "staccato-burst", StartIndex: 2, EndIndex: 40, MatchedText: ""},
-	}
-	original := "- A. B. C. D. continuation of the item prose.\n"
-	suppress := []markdown.Range{
-		{Start: 0, End: len(original), Kind: markdown.KindListItem},
-	}
-	out := applyMarkdownSuppressions(vs, suppress, original)
-	if len(out) != 1 {
-		t.Fatalf("expected staccato-burst to survive within a single list item, got %+v", out)
+		// No survivor may be a dramatic-fragment on a heading or a
+		// staccato-burst across two+ list items.
+		if v.RuleID == "dramatic-fragment" && markdown.Overlaps(v.StartIndex, v.EndIndex, suppress, markdown.KindHeading) {
+			t.Fatalf("dramatic-fragment survived on a heading span: %+v", v)
+		}
+		if v.RuleID == "staccato-burst" && markdown.CountOverlapping(v.StartIndex, v.EndIndex, suppress, markdown.KindListItem) >= 2 {
+			t.Fatalf("staccato-burst survived across list items: %+v", v)
+		}
 	}
 }

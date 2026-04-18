@@ -1,10 +1,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -17,28 +15,32 @@ import (
 )
 
 // checkReport is the JSON document emitted by `slop-cop check`. Counts are
-// denormalised to save callers a pass over the violations slice.
+// denormalised so callers don't have to walk the violations slice.
 type checkReport struct {
 	TextLength       int                             `json:"text_length"`
 	Violations       []types.Violation               `json:"violations"`
 	CountsByRule     map[string]int                  `json:"counts_by_rule"`
 	CountsByCategory map[types.ViolationCategory]int `json:"counts_by_category"`
-	Markdown         bool                            `json:"markdown,omitempty"`
+	// Markdown reports whether markdown-aware masking + suppression ran.
+	// Always emitted (not omitempty) so agents can tell "off" from "absent".
+	Markdown bool `json:"markdown"`
 }
 
-// markdownExts enumerates file extensions that trigger markdown mode when
-// --markdown=auto (the default). Matched case-insensitively.
+// markdownExts enumerates file extensions that activate markdown mode under
+// --markdown=auto. Matched case-insensitively.
 var markdownExts = map[string]bool{
 	".md":       true,
 	".markdown": true,
 	".mdx":      true,
 }
 
+// resolveMarkdown interprets the value of --markdown. The three accepted
+// values are strict: auto, on, off. Any other value is a usage error.
 func resolveMarkdown(mode, path string) (bool, error) {
 	switch strings.ToLower(mode) {
-	case "on", "true", "yes":
+	case "on":
 		return true, nil
-	case "off", "false", "no":
+	case "off":
 		return false, nil
 	case "", "auto":
 		if path == "" || path == "-" {
@@ -54,12 +56,10 @@ func newCheckCmd() *cobra.Command {
 	var (
 		useLLM    bool
 		useDeep   bool
-		claudeBin string
 		sentModel string
 		docModel  string
 		sentTO    time.Duration
 		docTO     time.Duration
-		pretty    bool
 		mdMode    string
 	)
 	cmd := &cobra.Command{
@@ -86,135 +86,85 @@ bulleted-list items). Activation is controlled by --markdown:
   cat article.md | slop-cop check --llm
   slop-cop check - --markdown=on --llm --llm-deep < article.md`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			path := ""
-			if len(args) == 1 {
-				path = args[0]
-			}
-			text, err := readInput(path)
-			if err != nil {
-				return err
-			}
-			ctx := cmd.Context()
-			if ctx == nil {
-				ctx = context.Background()
-			}
-
-			mdOn, err := resolveMarkdown(mdMode, path)
-			if err != nil {
-				return usageError{err: err}
-			}
-
-			// In markdown mode we run detectors (and the LLM passes) on a
-			// masked copy of the input. Violation byte offsets still index
-			// into the original bytes (mask preserves length); we re-slice
-			// matchedText from the original after filtering.
-			scanText := text
-			var suppress []markdown.Range
-			if mdOn {
-				scanText, suppress, _ = markdown.Analyze(text)
-			}
-
-			violations := detectors.RunClient(scanText)
-
-			if useLLM || useDeep {
-				opts := llm.Options{Bin: claudeBin}
-				if useLLM {
-					sentOpts := opts
-					sentOpts.Model = sentModel
-					sentOpts.Timeout = sentTO
-					vs, err := llm.RunSentence(ctx, scanText, sentOpts)
-					if err != nil {
-						return llmError{err: fmt.Errorf("sentence pass: %w", err)}
-					}
-					violations = append(violations, vs...)
-				}
-				if useDeep {
-					docOpts := opts
-					docOpts.Model = docModel
-					docOpts.Timeout = docTO
-					vs, err := llm.RunDocument(ctx, scanText, docOpts)
-					if err != nil {
-						return llmError{err: fmt.Errorf("document pass: %w", err)}
-					}
-					violations = append(violations, vs...)
-				}
-				violations = detectors.Deduplicate(violations)
-			}
-
-			if mdOn {
-				violations = applyMarkdownSuppressions(violations, suppress, text)
-			}
-
-			sort.SliceStable(violations, func(i, j int) bool {
-				if violations[i].StartIndex != violations[j].StartIndex {
-					return violations[i].StartIndex < violations[j].StartIndex
-				}
-				if violations[i].EndIndex != violations[j].EndIndex {
-					return violations[i].EndIndex < violations[j].EndIndex
-				}
-				return violations[i].RuleID < violations[j].RuleID
-			})
-
-			if violations == nil {
-				violations = []types.Violation{}
-			}
-
-			report := checkReport{
-				TextLength:       len(text),
-				Violations:       violations,
-				CountsByRule:     map[string]int{},
-				CountsByCategory: map[types.ViolationCategory]int{},
-				Markdown:         mdOn,
-			}
-			for _, v := range violations {
-				report.CountsByRule[v.RuleID]++
-				if rule, ok := rules.ByID[v.RuleID]; ok {
-					report.CountsByCategory[rule.Category]++
-				}
-			}
-			return writeJSON(report, pretty)
-		},
 	}
+	claudeBin := addClaudeBinFlag(cmd)
+	pretty := addPrettyFlag(cmd)
 	cmd.Flags().BoolVar(&useLLM, "llm", false, "Run the sentence-level semantic pass via `claude -p`.")
 	cmd.Flags().BoolVar(&useDeep, "llm-deep", false, "Run the document-level structural pass via `claude -p`.")
-	cmd.Flags().StringVar(&claudeBin, "claude-bin", "claude", "Path to the claude CLI binary.")
 	cmd.Flags().StringVar(&sentModel, "sentence-model", llm.DefaultSentenceModel, "Model slug for the sentence pass.")
 	cmd.Flags().StringVar(&docModel, "document-model", llm.DefaultDocumentModel, "Model slug for the document pass.")
 	cmd.Flags().DurationVar(&sentTO, "sentence-timeout", llm.DefaultSentenceTimeout, "Timeout for each sentence-pass chunk.")
 	cmd.Flags().DurationVar(&docTO, "document-timeout", llm.DefaultDocumentTimeout, "Timeout for the document pass.")
-	cmd.Flags().BoolVar(&pretty, "pretty", false, "Indent JSON output.")
 	cmd.Flags().StringVar(&mdMode, "markdown", "auto", "Treat input as markdown: auto|on|off.")
-	return cmd
-}
 
-// applyMarkdownSuppressions drops violations that correspond to false
-// positives on markdown structural elements. It runs *after* the detector
-// passes on the masked text and *before* sorting/reporting. Surviving
-// violations have their MatchedText re-populated from the original input so
-// consumers see actual prose bytes, not the masked whitespace.
-func applyMarkdownSuppressions(vs []types.Violation, suppress []markdown.Range, original string) []types.Violation {
-	out := vs[:0]
-	for _, v := range vs {
-		switch v.RuleID {
-		case "dramatic-fragment":
-			if markdown.Overlaps(v.StartIndex, v.EndIndex, suppress, markdown.KindHeading) {
-				continue
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		path := pathArg(args)
+		text, err := readInput(path)
+		if err != nil {
+			return err
+		}
+		ctx := runContext(cmd)
+
+		mdOn, err := resolveMarkdown(mdMode, path)
+		if err != nil {
+			return usageError{err: err}
+		}
+
+		// In markdown mode, detectors (and the LLM passes) run on a masked
+		// copy of the input. Offsets still index into the original bytes
+		// (Analyze preserves length), so we re-slice MatchedText from the
+		// original after filtering in ApplySuppressions.
+		scanText := text
+		var suppress []markdown.Range
+		if mdOn {
+			scanText, suppress, _ = markdown.Analyze(text)
+		}
+
+		violations := detectors.RunClient(scanText)
+
+		if useLLM {
+			opts := llm.Options{Bin: *claudeBin, Model: sentModel, Timeout: sentTO}
+			vs, err := llm.RunSentence(ctx, scanText, opts)
+			if err != nil {
+				return llmError{err: fmt.Errorf("sentence pass: %w", err)}
 			}
-		case "staccato-burst":
-			// A short-sentence burst that straddles two or more consecutive
-			// list items is just a list; drop it.
-			if markdown.CountOverlapping(v.StartIndex, v.EndIndex, suppress, markdown.KindListItem) >= 2 {
-				continue
+			violations = append(violations, vs...)
+		}
+		if useDeep {
+			opts := llm.Options{Bin: *claudeBin, Model: docModel, Timeout: docTO}
+			vs, err := llm.RunDocument(ctx, scanText, opts)
+			if err != nil {
+				return llmError{err: fmt.Errorf("document pass: %w", err)}
+			}
+			violations = append(violations, vs...)
+		}
+		if useLLM || useDeep {
+			violations = detectors.Deduplicate(violations)
+		}
+
+		if mdOn {
+			violations = markdown.ApplySuppressions(violations, suppress, text)
+		}
+
+		sortViolations(violations)
+		if violations == nil {
+			violations = []types.Violation{}
+		}
+
+		report := checkReport{
+			TextLength:       len(text),
+			Violations:       violations,
+			CountsByRule:     map[string]int{},
+			CountsByCategory: map[types.ViolationCategory]int{},
+			Markdown:         mdOn,
+		}
+		for _, v := range violations {
+			report.CountsByRule[v.RuleID]++
+			if rule, ok := rules.ByID[v.RuleID]; ok {
+				report.CountsByCategory[rule.Category]++
 			}
 		}
-		if v.StartIndex >= 0 && v.EndIndex <= len(original) && v.EndIndex >= v.StartIndex {
-			v.MatchedText = original[v.StartIndex:v.EndIndex]
-		}
-		out = append(out, v)
+		return writeJSON(report, *pretty)
 	}
-	// Copy to release aliased capacity and give callers a clean slice.
-	result := make([]types.Violation, len(out))
-	copy(result, out)
-	return result
+	return cmd
 }
