@@ -135,8 +135,9 @@ Flags:
 | Flag                 | Default                     | Purpose                                                                    |
 | -------------------- | --------------------------- | -------------------------------------------------------------------------- |
 | `--markdown`         | `auto`                      | `auto\|on\|off`. Auto enables markdown mode for `.md` / `.markdown` / `.mdx`. |
-| `--llm`              | auto (on under plugin)      | Sentence-tier semantic pass (Claude Haiku). Auto-enabled when `$CLAUDE_PLUGIN_ROOT` or `$CURSOR_PLUGIN_ROOT` is set AND the `claude` CLI is on `$PATH`; pass `--llm=false` to opt out. |
-| `--llm-deep`         | auto (on under plugin)      | Document-tier structural pass (Claude Sonnet). Same auto-default as `--llm`. |
+| `--llm-effort`       | `auto`                      | `off\|low\|high\|auto`. Controls LLM passes. `auto` = `high` under plugin context, `off` otherwise. |
+| `--llm`              | —                           | Sugar alias for `--llm-effort=low` (sentence tier, Claude Haiku).          |
+| `--llm-deep`         | —                           | Sugar alias for `--llm-effort=high` (sentence + document tiers, Haiku + Sonnet). |
 | `--claude-bin`       | `claude`                    | Path to the `claude` CLI                                                   |
 | `--sentence-model`   | `claude-haiku-4-5-20251001` | Model slug for `--llm`                                                     |
 | `--document-model`   | `claude-sonnet-4-6`         | Model slug for `--llm-deep`                                                |
@@ -231,17 +232,41 @@ then merged and deduplicated by `ruleId + matchedText`. 10 rules:
 `pivot-paragraph`, `grandiose-stakes`, `historical-analogy`,
 `false-vulnerability`.
 
-**`--llm-deep` (document-tier).** Shells out to Claude Sonnet. 3 rules:
-`dead-metaphor`, `one-point-dilution`, `fractal-summaries`.
+**`high` effort (document-tier).** Shells out to Claude Sonnet. 3 rules:
+`dead-metaphor`, `one-point-dilution`, `fractal-summaries`. Always runs in
+addition to the sentence tier (i.e. `high` = sentence + document, not
+document alone).
+
+### LLM effort levels
+
+`--llm-effort` chooses how much LLM analysis to run:
+
+| Level  | Passes                         | Typical cost per check            |
+| ------ | ------------------------------ | --------------------------------- |
+| `off`  | none — client-side only        | free                              |
+| `low`  | sentence (Haiku)               | low                               |
+| `high` | sentence + document (Sonnet)   | higher (Sonnet dominates)         |
+| `auto` | `high` under plugin, `off` otherwise | 0 or higher depending on context |
+
+Two sugar aliases are kept for convenience:
+
+- `--llm`       ≡ `--llm-effort=low`
+- `--llm-deep`  ≡ `--llm-effort=high`
+
+If you mix them, `--llm-effort` (when explicitly set) wins; otherwise
+`--llm-deep` wins over `--llm`.
 
 ### Auto-default under a plugin
 
 When `slop-cop check` detects it is running inside a Claude Code or Cursor
 plugin (either `$CLAUDE_PLUGIN_ROOT` or `$CURSOR_PLUGIN_ROOT` is set) and
-the `claude` CLI is reachable on `$PATH`, both LLM passes are auto-enabled.
-The `llm` field in the JSON report tells you what actually ran:
+the `claude` CLI is reachable on `$PATH`, `--llm-effort=auto` resolves to
+`high` and both passes run. The resolved effort is always reported in the
+JSON (`"llm_effort": "high"` etc.); the `llm` field reports per-tier
+outcomes:
 
 ```json
+"llm_effort": "high",
 "llm": {
   "sentence": { "auto": true, "ran": true },
   "document": { "auto": true, "ran": false, "error": "claude: exit status 1: …" }
@@ -251,9 +276,9 @@ The `llm` field in the JSON report tells you what actually ran:
 Auto-enabled passes degrade gracefully: if `claude` isn't reachable or
 returns an error (missing auth, rate limit, timeout), the failure is
 captured in the `error` field and the client-side detectors still return
-their results. An explicit `--llm=true` still propagates errors as exit
-code 3. Pass `--llm=false` / `--llm-deep=false` to force the passes off
-under a plugin.
+their results. An explicit `--llm-effort=low` / `high` still propagates
+errors as exit code 3. Pass `--llm-effort=off` (or `--llm=false`,
+`--llm-deep=false`) to force the passes off under a plugin.
 
 ## Rules
 

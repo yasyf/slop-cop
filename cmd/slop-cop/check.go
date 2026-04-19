@@ -26,10 +26,11 @@ type checkReport struct {
 	// Markdown reports whether markdown-aware masking + suppression ran.
 	// Always emitted (not omitempty) so agents can tell "off" from "absent".
 	Markdown bool `json:"markdown"`
-	// LLM reports what the sentence/document-tier LLM passes actually did,
-	// including whether they were auto-enabled from the plugin environment
-	// and whether they failed. Omitted entirely when no LLM pass was
-	// requested or auto-enabled.
+	// LLMEffort is the effort level slop-cop resolved to for this run:
+	// "off", "low", or "high". Emitted alongside LLM so agents can read
+	// the setting even when no pass ran.
+	LLMEffort string `json:"llm_effort"`
+	// LLM captures per-tier outcomes. Omitted entirely when effort=off.
 	LLM *llmReport `json:"llm,omitempty"`
 }
 
@@ -42,8 +43,8 @@ type llmReport struct {
 
 // llmPassStatus describes a single LLM pass's outcome.
 type llmPassStatus struct {
-	// Auto is true when the pass was enabled by auto-default (plugin env
-	// detected + claude CLI on $PATH) rather than an explicit --llm flag.
+	// Auto is true when the pass was enabled by the auto-default rather
+	// than an explicit flag. Drives fail-open vs fail-closed semantics.
 	Auto bool `json:"auto"`
 	// Ran is true when the pass executed successfully and contributed
 	// violations to the report.
@@ -79,6 +80,15 @@ func resolveMarkdown(mode, path string) (bool, error) {
 	}
 }
 
+// llmEffort is the canonical effort level for the LLM passes.
+type llmEffort string
+
+const (
+	effortOff  llmEffort = "off"
+	effortLow  llmEffort = "low"
+	effortHigh llmEffort = "high"
+)
+
 // pluginEnvActive reports whether the process is running under a Claude Code
 // or Cursor plugin invocation. Both products export PLUGIN_ROOT env vars
 // into their tool subshells; we use their presence as a signal that the
@@ -102,10 +112,58 @@ func autoEnableLLM(claudeBin string) bool {
 	return true
 }
 
+// resolveEffort picks the LLM effort level for this run. Precedence:
+//  1. --llm-effort when explicitly set (authoritative);
+//  2. --llm-deep (sugar alias: true→high, false→off), over
+//  3. --llm        (sugar alias: true→low,  false→off);
+//  4. no explicit flags → auto (plugin-aware default).
+//
+// The second return value is true when the chosen effort came from the
+// auto-default — that's what distinguishes fail-open (auto) from
+// fail-closed (explicit) error handling for the LLM passes.
+func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag bool, claudeBin string) (llmEffort, bool, error) {
+	if cmd.Flags().Changed("llm-effort") {
+		switch strings.ToLower(effortFlag) {
+		case "off":
+			return effortOff, false, nil
+		case "low":
+			return effortLow, false, nil
+		case "high":
+			return effortHigh, false, nil
+		case "", "auto":
+			return autoEffort(claudeBin), true, nil
+		default:
+			return effortOff, false, fmt.Errorf("invalid --llm-effort %q (want off|low|high|auto)", effortFlag)
+		}
+	}
+	// --llm-deep is more specific than --llm, so let it win.
+	if cmd.Flags().Changed("llm-deep") {
+		if deepFlag {
+			return effortHigh, false, nil
+		}
+		return effortOff, false, nil
+	}
+	if cmd.Flags().Changed("llm") {
+		if llmFlag {
+			return effortLow, false, nil
+		}
+		return effortOff, false, nil
+	}
+	return autoEffort(claudeBin), true, nil
+}
+
+func autoEffort(claudeBin string) llmEffort {
+	if autoEnableLLM(claudeBin) {
+		return effortHigh
+	}
+	return effortOff
+}
+
 func newCheckCmd() *cobra.Command {
 	var (
-		useLLM    bool
-		useDeep   bool
+		llmFlag   bool
+		deepFlag  bool
+		effort    string
 		sentModel string
 		docModel  string
 		sentTO    time.Duration
@@ -115,18 +173,21 @@ func newCheckCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check [path|-]",
 		Short: "Run detectors over a file (or stdin) and emit a JSON report.",
-		Long: `Runs all 35 client-side detectors by default. The sentence-level
-(Claude Haiku) and document-level (Claude Sonnet) semantic passes run via
-the claude CLI and can be toggled with --llm / --llm-deep.
+		Long: `Runs all 35 client-side detectors by default. Two optional LLM passes
+run via the claude CLI:
 
-When invoked from a Claude Code or Cursor plugin (detected via the
-CLAUDE_PLUGIN_ROOT / CURSOR_PLUGIN_ROOT env vars) and the claude CLI is on
-$PATH, both LLM passes default to on. Pass --llm=false / --llm-deep=false
-to opt out. If an auto-enabled pass fails for any reason (missing auth,
-network error, rate limit) the failure is reported in the JSON under
-'llm.<tier>.error' and the client-side detector results are still
-returned; a user-requested pass with --llm=true propagates the error as
-exit code 3.
+  low   sentence-tier semantic analysis (Claude Haiku)
+  high  low + document-tier structural analysis (Claude Sonnet)
+
+Choose one with --llm-effort (off|low|high|auto), or use the sugar aliases:
+  --llm       → --llm-effort=low
+  --llm-deep  → --llm-effort=high
+
+Under a Claude Code or Cursor plugin (detected via CLAUDE_PLUGIN_ROOT /
+CURSOR_PLUGIN_ROOT) and when the claude CLI is on $PATH, --llm-effort=auto
+resolves to 'high'; otherwise 'off'. Auto-enabled passes fail open (the
+failure is reported under 'llm.<tier>.error' and the client-side results
+are still returned); explicit passes propagate the error as exit code 3.
 
 Input is taken from the path argument, or from stdin when the path is "-"
 or omitted.
@@ -142,14 +203,15 @@ bulleted-list items). Activation is controlled by --markdown:
   on     Force markdown mode.
   off    Treat the input as plain text regardless of extension.`,
 		Example: `  slop-cop check article.md --pretty
-  cat article.md | slop-cop check --llm=false
-  slop-cop check - --markdown=on --llm --llm-deep < article.md`,
+  cat article.md | slop-cop check --llm-effort=off
+  slop-cop check - --markdown=on --llm-effort=high < article.md`,
 		Args: cobra.MaximumNArgs(1),
 	}
 	claudeBin := addClaudeBinFlag(cmd)
 	pretty := addPrettyFlag(cmd)
-	cmd.Flags().BoolVar(&useLLM, "llm", false, "Run the sentence-level semantic pass via `claude -p`. Default auto-on under a Claude Code / Cursor plugin; pass --llm=false to opt out.")
-	cmd.Flags().BoolVar(&useDeep, "llm-deep", false, "Run the document-level structural pass via `claude -p`. Default auto-on under a Claude Code / Cursor plugin; pass --llm-deep=false to opt out.")
+	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = high under plugin context, off otherwise.")
+	cmd.Flags().BoolVar(&llmFlag, "llm", false, "Alias for --llm-effort=low (sentence tier via Claude Haiku).")
+	cmd.Flags().BoolVar(&deepFlag, "llm-deep", false, "Alias for --llm-effort=high (sentence + document tiers, Haiku + Sonnet).")
 	cmd.Flags().StringVar(&sentModel, "sentence-model", llm.DefaultSentenceModel, "Model slug for the sentence pass.")
 	cmd.Flags().StringVar(&docModel, "document-model", llm.DefaultDocumentModel, "Model slug for the document pass.")
 	cmd.Flags().DurationVar(&sentTO, "sentence-timeout", llm.DefaultSentenceTimeout, "Timeout for each sentence-pass chunk.")
@@ -169,16 +231,12 @@ bulleted-list items). Activation is controlled by --markdown:
 			return usageError{err: err}
 		}
 
-		// Auto-enable LLM passes in plugin contexts the user didn't already
-		// address. autoSentence / autoDocument track "was this flag set by
-		// the auto-default?" so we can degrade gracefully on failure.
-		autoSentence, autoDocument := false, false
-		if !cmd.Flags().Changed("llm") && !useLLM && autoEnableLLM(*claudeBin) {
-			useLLM, autoSentence = true, true
+		eff, auto, err := resolveEffort(cmd, effort, llmFlag, deepFlag, *claudeBin)
+		if err != nil {
+			return usageError{err: err}
 		}
-		if !cmd.Flags().Changed("llm-deep") && !useDeep && autoEnableLLM(*claudeBin) {
-			useDeep, autoDocument = true, true
-		}
+		runSentence := eff == effortLow || eff == effortHigh
+		runDocument := eff == effortHigh
 
 		// In markdown mode, detectors (and the LLM passes) run on a masked
 		// copy of the input. Offsets still index into the original bytes
@@ -200,11 +258,11 @@ bulleted-list items). Activation is controlled by --markdown:
 			return llmRep
 		}
 
-		if useLLM {
+		if runSentence {
 			opts := llm.Options{Bin: *claudeBin, Model: sentModel, Timeout: sentTO}
 			vs, err := llm.RunSentence(ctx, scanText, opts)
 			if err != nil {
-				if autoSentence {
+				if auto {
 					fmt.Fprintln(os.Stderr, "slop-cop: sentence LLM pass skipped (auto-enabled, claude failed):", err)
 					ensureReport().Sentence = &llmPassStatus{Auto: true, Ran: false, Error: err.Error()}
 				} else {
@@ -212,14 +270,14 @@ bulleted-list items). Activation is controlled by --markdown:
 				}
 			} else {
 				violations = append(violations, vs...)
-				ensureReport().Sentence = &llmPassStatus{Auto: autoSentence, Ran: true}
+				ensureReport().Sentence = &llmPassStatus{Auto: auto, Ran: true}
 			}
 		}
-		if useDeep {
+		if runDocument {
 			opts := llm.Options{Bin: *claudeBin, Model: docModel, Timeout: docTO}
 			vs, err := llm.RunDocument(ctx, scanText, opts)
 			if err != nil {
-				if autoDocument {
+				if auto {
 					fmt.Fprintln(os.Stderr, "slop-cop: document LLM pass skipped (auto-enabled, claude failed):", err)
 					ensureReport().Document = &llmPassStatus{Auto: true, Ran: false, Error: err.Error()}
 				} else {
@@ -227,10 +285,10 @@ bulleted-list items). Activation is controlled by --markdown:
 				}
 			} else {
 				violations = append(violations, vs...)
-				ensureReport().Document = &llmPassStatus{Auto: autoDocument, Ran: true}
+				ensureReport().Document = &llmPassStatus{Auto: auto, Ran: true}
 			}
 		}
-		if useLLM || useDeep {
+		if runSentence || runDocument {
 			violations = detectors.Deduplicate(violations)
 		}
 
@@ -249,6 +307,7 @@ bulleted-list items). Activation is controlled by --markdown:
 			CountsByRule:     map[string]int{},
 			CountsByCategory: map[types.ViolationCategory]int{},
 			Markdown:         mdOn,
+			LLMEffort:        string(eff),
 			LLM:              llmRep,
 		}
 		for _, v := range violations {

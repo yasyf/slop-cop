@@ -83,12 +83,13 @@ location: the plugin root is the directory two levels above this file
 
    Running inside Claude Code or Cursor, slop-cop detects the plugin
    environment (`$CLAUDE_PLUGIN_ROOT` / `$CURSOR_PLUGIN_ROOT`) and the
-   `claude` CLI, and auto-enables the `--llm` + `--llm-deep` semantic
-   passes. The `llm` field in the JSON report tells you what actually ran;
-   if `claude` isn't reachable, those passes are reported as skipped with
-   an `error` message and the client-side results are still returned. Pass
-   `--llm=false --llm-deep=false` if you explicitly want to skip the
-   semantic tiers (e.g. for speed on small edits).
+   `claude` CLI and defaults `--llm-effort=auto` → `high` (both sentence
+   and document tiers). The `llm_effort` + `llm` fields in the JSON
+   report tell you what actually ran; if `claude` isn't reachable, those
+   passes are reported as skipped with an `error` message and the
+   client-side results are still returned. Pass `--llm-effort=off` (or
+   `--llm-effort=low` for sentence-only) if you want to cut cost or speed
+   for small edits.
 
 3. **Revise.** Walk the `violations` array, prioritising these high-signal
    rules first. The canonical fix for each:
@@ -141,19 +142,21 @@ Second pass: `counts_by_rule: {}`. Done. That's what the user sees.
 
 ## Semantic tiers
 
-Two LLM passes layer on top of the 35 client-side detectors. They are
-auto-enabled under the plugin, so usually you don't need to think about
-them; the table of extra rules each tier catches:
+Two LLM passes layer on top of the 35 client-side detectors, selected via
+`--llm-effort=off|low|high|auto`. `auto` is the default and resolves to
+`high` under the plugin, so usually you don't need to think about it.
 
-- `--llm` (sentence tier, Claude Haiku): `balanced-take`,
-  `unnecessary-elaboration`, `grandiose-stakes`, `empathy-performance`,
-  `sycophantic-frame`, `throat-clearing`, `pivot-paragraph`,
-  `historical-analogy`, `false-vulnerability`, `triple-construction`.
-- `--llm-deep` (document tier, Claude Sonnet): `dead-metaphor`,
-  `one-point-dilution`, `fractal-summaries`.
+| Effort | Passes run                                 | Extra rules caught                               |
+| ------ | ------------------------------------------ | ------------------------------------------------ |
+| `off`  | none                                       | —                                                |
+| `low`  | sentence tier (Claude Haiku)               | `balanced-take`, `unnecessary-elaboration`, `grandiose-stakes`, `empathy-performance`, `sycophantic-frame`, `throat-clearing`, `pivot-paragraph`, `historical-analogy`, `false-vulnerability`, `triple-construction` |
+| `high` | sentence + document (Haiku + Sonnet)       | the low list + `dead-metaphor`, `one-point-dilution`, `fractal-summaries` |
+
+Sugar aliases: `--llm` ≡ `--llm-effort=low`, `--llm-deep` ≡ `--llm-effort=high`.
 
 Both tiers shell out to `claude -p --output-format json --json-schema ...`.
 If the `claude` CLI is missing or fails (no auth, rate limit, timeout),
 the auto-enabled pass is skipped rather than erroring; the client-side
-detector output is always returned. Inspect `llm.sentence` / `llm.document`
-in the JSON report to see whether each tier actually ran.
+detector output is always returned. Inspect `llm_effort` and
+`llm.sentence` / `llm.document` in the JSON report to see what actually
+ran.
