@@ -29,7 +29,10 @@ case "$os" in
 esac
 
 tarball="slop-cop_${os}_${arch}.tar.gz"
-url="https://github.com/yasyf/slop-cop/releases/download/latest/${tarball}"
+# /releases/latest/download/<asset> is GitHub's native redirect to the
+# newest release's asset (distinct from /releases/download/<tag>/<asset>,
+# which requires a literal tag). curl follows the 302.
+url="https://github.com/yasyf/slop-cop/releases/latest/download/${tarball}"
 
 mkdir -p "$BIN_DIR"
 tmp=$(mktemp -d)

@@ -273,15 +273,30 @@ internal/                Detectors, rules, types, LLM subprocess wrapper
 
 `main` is the release. Every push to `main` triggers
 [release.yml](.github/workflows/release.yml), which cross-compiles for
-linux/darwin/windows/freebsd × amd64/arm64 and upserts a single moving
-`latest` GitHub Release. Asset URLs are stable:
+linux/darwin/windows/freebsd × amd64/arm64 and publishes an immutable
+`v0.1.<run_number>` GitHub Release. `<run_number>` is GitHub Actions'
+monotonic workflow counter, so versions climb 0.1.7, 0.1.8, 0.1.9, …
+automatically. GitHub marks the newest release as "Latest".
+
+Stable install URL (no pinning required):
 
 ```
-https://github.com/yasyf/slop-cop/releases/download/latest/slop-cop_<os>_<arch>.tar.gz
+https://github.com/yasyf/slop-cop/releases/latest/download/slop-cop_<os>_<arch>.tar.gz
 ```
 
-No tags, no versioned releases. If you need a reproducible install, pin to
-a specific commit SHA via `go install` on a module-proxy-backed path.
+To pin to a specific build, use the tag directly:
+
+```bash
+go install github.com/yasyf/slop-cop/cmd/slop-cop@v0.1.7
+```
+
+or the versioned asset URL:
+
+```
+https://github.com/yasyf/slop-cop/releases/download/v0.1.7/slop-cop_<os>_<arch>.tar.gz
+```
+
+`slop-cop version` reports the matching `0.1.<n>` string baked in at build time.
 
 ## Development
 

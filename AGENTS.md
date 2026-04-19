@@ -2,7 +2,7 @@
 
 ## Learned User Preferences
 
-- Prefer a single rolling `latest` release over tags/versioned releases for continuously-shipped projects. Do not add tag-triggered release logic.
+- Prefer automated per-push releases driven by GitHub Actions' built-ins over hand-bumped semver tags. Use `github.run_number` as the build number and let GitHub's `/releases/latest` endpoint track "current" — never hand-maintain a mutable `latest` tag.
 - Prefer small in-tree subprocess wrappers (`os/exec` + `encoding/json`) over adopting SDKs whose surface area exceeds the need. `severity1/claude-agent-sdk-go` was rejected specifically because it doesn't expose `claude -p --output-format json --json-schema`.
 - End-to-end plugin tests belong in a local script (`scripts/test-plugin.sh`), not in CI.
 - When GitHub Actions emit Node runtime deprecation warnings, bump the action versions; do not ignore or suppress with env vars.
@@ -10,8 +10,8 @@
 
 ## Learned Workspace Facts
 
-- `main` is the release. Every push to `main` triggers `.github/workflows/release.yml`, which cross-compiles linux/darwin/windows/freebsd × amd64/arm64 and upserts the single moving `latest` GitHub Release. No tags, no versioned releases.
-- Binary URLs are stable: `https://github.com/yasyf/slop-cop/releases/download/latest/slop-cop_<os>_<arch>.tar.gz`. The plugin's first-run bootstrap (`scripts/install-binary.sh` / `.ps1`) downloads from here; never require users to install Go.
+- `main` is the release. Every push to `main` triggers `.github/workflows/release.yml`, which cross-compiles linux/darwin/windows/freebsd × amd64/arm64 and publishes an immutable `v0.1.${{ github.run_number }}` release (tag carries the `v` prefix so Go's module proxy treats it as semver; the binary's printed version string is `0.1.<n>` without the `v`, embedded via `-ldflags -X main.version=0.1.<n>`). Releases are marked `make_latest: true`.
+- Binary URLs use GitHub's native redirect: `https://github.com/yasyf/slop-cop/releases/latest/download/slop-cop_<os>_<arch>.tar.gz`. The plugin's first-run bootstrap (`scripts/install-binary.sh` / `.ps1`) fetches from this redirect — GitHub resolves it to the newest release automatically. Never require users to install Go.
 - Go toolchain is pinned to 1.26.2 via `.tool-versions` (asdf). Run `asdf install` in the repo root.
 - LLM calls shell out to `claude -p --output-format json --json-schema ...` via `internal/llm`. slop-cop never holds an Anthropic API key; it rides the user's `claude` CLI subscription.
 - Violation `startIndex` / `endIndex` are UTF-8 byte offsets, not UTF-16 code units as in the upstream JS. Preserve this invariant in detectors and consumers.

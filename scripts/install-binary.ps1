@@ -30,7 +30,9 @@ switch ($env:PROCESSOR_ARCHITECTURE) {
 }
 
 $zip = "slop-cop_windows_${arch}.zip"
-$url = "https://github.com/yasyf/slop-cop/releases/download/latest/$zip"
+# /releases/latest/download/<asset> is GitHub's native redirect to the
+# newest release's asset. Invoke-WebRequest follows the 302 by default.
+$url = "https://github.com/yasyf/slop-cop/releases/latest/download/$zip"
 
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 $tmp = New-Item -ItemType Directory -Path ([IO.Path]::GetTempPath()) -Name ([Guid]::NewGuid())

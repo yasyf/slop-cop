@@ -1,5 +1,10 @@
 name: Release
 
+# Version scheme is 0.1.${{ github.run_number }} — github.run_number is
+# GitHub Actions' monotonic per-workflow counter. It is stable across
+# pushes as long as this workflow file keeps its path (.github/workflows/
+# release.yml); renaming/replacing the file would reset the counter.
+
 on:
   push:
     branches: [main]
@@ -45,11 +50,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Resolve commit
-        id: meta
-        shell: bash
-        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
@@ -57,12 +57,13 @@ jobs:
           CGO_ENABLED: '0'
         shell: bash
         run: |
+          version="0.1.${{ github.run_number }}"
           outdir="dist/slop-cop_${{ matrix.goos }}_${{ matrix.goarch }}"
           mkdir -p "$outdir"
           go build -trimpath \
             -ldflags "-s -w \
-              -X main.version=latest \
-              -X main.commit=${{ steps.meta.outputs.commit }}" \
+              -X main.version=${version} \
+              -X main.commit=${{ github.sha }}" \
             -o "$outdir/slop-cop${{ matrix.ext }}" \
             ./cmd/slop-cop
           cp LICENSE NOTICE README.md "$outdir/"
@@ -91,7 +92,7 @@ jobs:
           retention-days: 14
 
   release:
-    name: publish rolling `latest`
+    name: publish v0.1.${{ github.run_number }}
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -110,18 +111,37 @@ jobs:
           cat *.sha256 > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Publish `latest` release
+      - name: Derive version
+        id: ver
+        shell: bash
+        run: |
+          ver="0.1.${{ github.run_number }}"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "tag=v$ver"    >> "$GITHUB_OUTPUT"
+
+      - name: Publish ${{ steps.ver.outputs.tag }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: latest
-          name: latest
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
           body: |
-            Rolling release built from the current tip of `main` (commit `${{ github.sha }}`).
-            Assets are replaced in place on every push; URLs are stable.
-          prerelease: true
-          make_latest: false
+            Automated release from `main` at commit `${{ github.sha }}`.
+            Build number: `${{ github.run_number }}`.
+
+            Resolve the current binary without pinning via:
+            `https://github.com/yasyf/slop-cop/releases/latest/download/slop-cop_<os>_<arch>.tar.gz`
+          target_commitish: ${{ github.sha }}
+          prerelease: false
+          make_latest: 'true'
           files: |
             dist/*.tar.gz
             dist/*.zip
             dist/SHA256SUMS.txt
           fail_on_unmatched_files: true
+
+      - name: Remove legacy mutable `latest` release (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release delete latest --cleanup-tag --yes --repo ${{ github.repository }} 2>/dev/null || true
