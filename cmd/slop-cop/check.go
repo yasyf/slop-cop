@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -24,6 +26,31 @@ type checkReport struct {
 	// Markdown reports whether markdown-aware masking + suppression ran.
 	// Always emitted (not omitempty) so agents can tell "off" from "absent".
 	Markdown bool `json:"markdown"`
+	// LLM reports what the sentence/document-tier LLM passes actually did,
+	// including whether they were auto-enabled from the plugin environment
+	// and whether they failed. Omitted entirely when no LLM pass was
+	// requested or auto-enabled.
+	LLM *llmReport `json:"llm,omitempty"`
+}
+
+// llmReport captures the outcome of the two LLM passes. Either sub-field
+// may be nil if that specific pass wasn't attempted.
+type llmReport struct {
+	Sentence *llmPassStatus `json:"sentence,omitempty"`
+	Document *llmPassStatus `json:"document,omitempty"`
+}
+
+// llmPassStatus describes a single LLM pass's outcome.
+type llmPassStatus struct {
+	// Auto is true when the pass was enabled by auto-default (plugin env
+	// detected + claude CLI on $PATH) rather than an explicit --llm flag.
+	Auto bool `json:"auto"`
+	// Ran is true when the pass executed successfully and contributed
+	// violations to the report.
+	Ran bool `json:"ran"`
+	// Error holds the pass's error message when Ran is false. Empty when
+	// the pass succeeded or wasn't attempted.
+	Error string `json:"error,omitempty"`
 }
 
 // markdownExts enumerates file extensions that activate markdown mode under
@@ -52,6 +79,29 @@ func resolveMarkdown(mode, path string) (bool, error) {
 	}
 }
 
+// pluginEnvActive reports whether the process is running under a Claude Code
+// or Cursor plugin invocation. Both products export PLUGIN_ROOT env vars
+// into their tool subshells; we use their presence as a signal that the
+// user's Claude subscription is reachable via the `claude` CLI.
+func pluginEnvActive() bool {
+	return os.Getenv("CLAUDE_PLUGIN_ROOT") != "" || os.Getenv("CURSOR_PLUGIN_ROOT") != ""
+}
+
+// autoEnableLLM returns true when the LLM passes should be auto-enabled for
+// this invocation: the plugin environment is present AND the `claude`
+// binary is actually on $PATH. Both conditions are required so that running
+// the CLI outside a plugin (or in a plugin environment that lacks the
+// subscription binary) never silently burns API credits.
+func autoEnableLLM(claudeBin string) bool {
+	if !pluginEnvActive() {
+		return false
+	}
+	if _, err := exec.LookPath(claudeBin); err != nil {
+		return false
+	}
+	return true
+}
+
 func newCheckCmd() *cobra.Command {
 	var (
 		useLLM    bool
@@ -65,9 +115,18 @@ func newCheckCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check [path|-]",
 		Short: "Run detectors over a file (or stdin) and emit a JSON report.",
-		Long: `Runs all 35 client-side detectors by default. Pass --llm to add the
-sentence-level semantic pass (Claude Haiku via the claude CLI); pass
---llm-deep to add the document-level structural pass (Claude Sonnet).
+		Long: `Runs all 35 client-side detectors by default. The sentence-level
+(Claude Haiku) and document-level (Claude Sonnet) semantic passes run via
+the claude CLI and can be toggled with --llm / --llm-deep.
+
+When invoked from a Claude Code or Cursor plugin (detected via the
+CLAUDE_PLUGIN_ROOT / CURSOR_PLUGIN_ROOT env vars) and the claude CLI is on
+$PATH, both LLM passes default to on. Pass --llm=false / --llm-deep=false
+to opt out. If an auto-enabled pass fails for any reason (missing auth,
+network error, rate limit) the failure is reported in the JSON under
+'llm.<tier>.error' and the client-side detector results are still
+returned; a user-requested pass with --llm=true propagates the error as
+exit code 3.
 
 Input is taken from the path argument, or from stdin when the path is "-"
 or omitted.
@@ -83,14 +142,14 @@ bulleted-list items). Activation is controlled by --markdown:
   on     Force markdown mode.
   off    Treat the input as plain text regardless of extension.`,
 		Example: `  slop-cop check article.md --pretty
-  cat article.md | slop-cop check --llm
+  cat article.md | slop-cop check --llm=false
   slop-cop check - --markdown=on --llm --llm-deep < article.md`,
 		Args: cobra.MaximumNArgs(1),
 	}
 	claudeBin := addClaudeBinFlag(cmd)
 	pretty := addPrettyFlag(cmd)
-	cmd.Flags().BoolVar(&useLLM, "llm", false, "Run the sentence-level semantic pass via `claude -p`.")
-	cmd.Flags().BoolVar(&useDeep, "llm-deep", false, "Run the document-level structural pass via `claude -p`.")
+	cmd.Flags().BoolVar(&useLLM, "llm", false, "Run the sentence-level semantic pass via `claude -p`. Default auto-on under a Claude Code / Cursor plugin; pass --llm=false to opt out.")
+	cmd.Flags().BoolVar(&useDeep, "llm-deep", false, "Run the document-level structural pass via `claude -p`. Default auto-on under a Claude Code / Cursor plugin; pass --llm-deep=false to opt out.")
 	cmd.Flags().StringVar(&sentModel, "sentence-model", llm.DefaultSentenceModel, "Model slug for the sentence pass.")
 	cmd.Flags().StringVar(&docModel, "document-model", llm.DefaultDocumentModel, "Model slug for the document pass.")
 	cmd.Flags().DurationVar(&sentTO, "sentence-timeout", llm.DefaultSentenceTimeout, "Timeout for each sentence-pass chunk.")
@@ -110,6 +169,17 @@ bulleted-list items). Activation is controlled by --markdown:
 			return usageError{err: err}
 		}
 
+		// Auto-enable LLM passes in plugin contexts the user didn't already
+		// address. autoSentence / autoDocument track "was this flag set by
+		// the auto-default?" so we can degrade gracefully on failure.
+		autoSentence, autoDocument := false, false
+		if !cmd.Flags().Changed("llm") && !useLLM && autoEnableLLM(*claudeBin) {
+			useLLM, autoSentence = true, true
+		}
+		if !cmd.Flags().Changed("llm-deep") && !useDeep && autoEnableLLM(*claudeBin) {
+			useDeep, autoDocument = true, true
+		}
+
 		// In markdown mode, detectors (and the LLM passes) run on a masked
 		// copy of the input. Offsets still index into the original bytes
 		// (Analyze preserves length), so we re-slice MatchedText from the
@@ -122,21 +192,43 @@ bulleted-list items). Activation is controlled by --markdown:
 
 		violations := detectors.RunClient(scanText)
 
+		var llmRep *llmReport
+		ensureReport := func() *llmReport {
+			if llmRep == nil {
+				llmRep = &llmReport{}
+			}
+			return llmRep
+		}
+
 		if useLLM {
 			opts := llm.Options{Bin: *claudeBin, Model: sentModel, Timeout: sentTO}
 			vs, err := llm.RunSentence(ctx, scanText, opts)
 			if err != nil {
-				return llmError{err: fmt.Errorf("sentence pass: %w", err)}
+				if autoSentence {
+					fmt.Fprintln(os.Stderr, "slop-cop: sentence LLM pass skipped (auto-enabled, claude failed):", err)
+					ensureReport().Sentence = &llmPassStatus{Auto: true, Ran: false, Error: err.Error()}
+				} else {
+					return llmError{err: fmt.Errorf("sentence pass: %w", err)}
+				}
+			} else {
+				violations = append(violations, vs...)
+				ensureReport().Sentence = &llmPassStatus{Auto: autoSentence, Ran: true}
 			}
-			violations = append(violations, vs...)
 		}
 		if useDeep {
 			opts := llm.Options{Bin: *claudeBin, Model: docModel, Timeout: docTO}
 			vs, err := llm.RunDocument(ctx, scanText, opts)
 			if err != nil {
-				return llmError{err: fmt.Errorf("document pass: %w", err)}
+				if autoDocument {
+					fmt.Fprintln(os.Stderr, "slop-cop: document LLM pass skipped (auto-enabled, claude failed):", err)
+					ensureReport().Document = &llmPassStatus{Auto: true, Ran: false, Error: err.Error()}
+				} else {
+					return llmError{err: fmt.Errorf("document pass: %w", err)}
+				}
+			} else {
+				violations = append(violations, vs...)
+				ensureReport().Document = &llmPassStatus{Auto: autoDocument, Ran: true}
 			}
-			violations = append(violations, vs...)
 		}
 		if useLLM || useDeep {
 			violations = detectors.Deduplicate(violations)
@@ -157,6 +249,7 @@ bulleted-list items). Activation is controlled by --markdown:
 			CountsByRule:     map[string]int{},
 			CountsByCategory: map[types.ViolationCategory]int{},
 			Markdown:         mdOn,
+			LLM:              llmRep,
 		}
 		for _, v := range violations {
 			report.CountsByRule[v.RuleID]++

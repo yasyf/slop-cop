@@ -73,13 +73,22 @@ location: the plugin root is the directory two levels above this file
    printf '%s' "$DRAFT" | "$SLOP_COP" check --markdown -
    ```
    `slop-cop` prints a JSON document of shape
-   `{"text_length": N, "violations": [...], "counts_by_rule": {...}, "counts_by_category": {...}, "markdown": true}`.
+   `{"text_length": N, "violations": [...], "counts_by_rule": {...}, "counts_by_category": {...}, "markdown": true, "llm": {...}}`.
 
    Always pass `--markdown`. LLM drafts are typically markdown-shaped (code
    fences, inline code, links, headings), and markdown mode masks those
    non-prose regions so detectors only see the actual writing. It is a
    no-op on plain prose. When checking a file path, `slop-cop check
    article.md` already auto-activates markdown mode by extension.
+
+   Running inside Claude Code or Cursor, slop-cop detects the plugin
+   environment (`$CLAUDE_PLUGIN_ROOT` / `$CURSOR_PLUGIN_ROOT`) and the
+   `claude` CLI, and auto-enables the `--llm` + `--llm-deep` semantic
+   passes. The `llm` field in the JSON report tells you what actually ran;
+   if `claude` isn't reachable, those passes are reported as skipped with
+   an `error` message and the client-side results are still returned. Pass
+   `--llm=false --llm-deep=false` if you explicitly want to skip the
+   semantic tiers (e.g. for speed on small edits).
 
 3. **Revise.** Walk the `violations` array, prioritising these high-signal
    rules first. The canonical fix for each:
@@ -130,12 +139,21 @@ Revision:
 
 Second pass: `counts_by_rule: {}`. Done. That's what the user sees.
 
-## Optional: deeper analysis
+## Semantic tiers
 
-For long-form drafts, `slop-cop check --llm --llm-deep -` adds a
-sentence-tier pass (Claude Haiku) and a document-tier pass (Claude Sonnet)
-that catch patterns like `balanced-take`, `unnecessary-elaboration`,
-`grandiose-stakes`, `one-point-dilution`, and `fractal-summaries`. These
-require the `claude` CLI on `$PATH`, which the user already has inside
-Claude Code. Use only when the basic pass is clean but the writing still
-feels off.
+Two LLM passes layer on top of the 35 client-side detectors. They are
+auto-enabled under the plugin, so usually you don't need to think about
+them; the table of extra rules each tier catches:
+
+- `--llm` (sentence tier, Claude Haiku): `balanced-take`,
+  `unnecessary-elaboration`, `grandiose-stakes`, `empathy-performance`,
+  `sycophantic-frame`, `throat-clearing`, `pivot-paragraph`,
+  `historical-analogy`, `false-vulnerability`, `triple-construction`.
+- `--llm-deep` (document tier, Claude Sonnet): `dead-metaphor`,
+  `one-point-dilution`, `fractal-summaries`.
+
+Both tiers shell out to `claude -p --output-format json --json-schema ...`.
+If the `claude` CLI is missing or fails (no auth, rate limit, timeout),
+the auto-enabled pass is skipped rather than erroring; the client-side
+detector output is always returned. Inspect `llm.sentence` / `llm.document`
+in the JSON report to see whether each tier actually ran.

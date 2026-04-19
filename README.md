@@ -135,8 +135,8 @@ Flags:
 | Flag                 | Default                     | Purpose                                                                    |
 | -------------------- | --------------------------- | -------------------------------------------------------------------------- |
 | `--markdown`         | `auto`                      | `auto\|on\|off`. Auto enables markdown mode for `.md` / `.markdown` / `.mdx`. |
-| `--llm`              | off                         | Sentence-tier semantic pass (Claude Haiku)                                 |
-| `--llm-deep`         | off                         | Document-tier structural pass (Claude Sonnet)                              |
+| `--llm`              | auto (on under plugin)      | Sentence-tier semantic pass (Claude Haiku). Auto-enabled when `$CLAUDE_PLUGIN_ROOT` or `$CURSOR_PLUGIN_ROOT` is set AND the `claude` CLI is on `$PATH`; pass `--llm=false` to opt out. |
+| `--llm-deep`         | auto (on under plugin)      | Document-tier structural pass (Claude Sonnet). Same auto-default as `--llm`. |
 | `--claude-bin`       | `claude`                    | Path to the `claude` CLI                                                   |
 | `--sentence-model`   | `claude-haiku-4-5-20251001` | Model slug for `--llm`                                                     |
 | `--document-model`   | `claude-sonnet-4-6`         | Model slug for `--llm-deep`                                                |
@@ -233,6 +233,27 @@ then merged and deduplicated by `ruleId + matchedText`. 10 rules:
 
 **`--llm-deep` (document-tier).** Shells out to Claude Sonnet. 3 rules:
 `dead-metaphor`, `one-point-dilution`, `fractal-summaries`.
+
+### Auto-default under a plugin
+
+When `slop-cop check` detects it is running inside a Claude Code or Cursor
+plugin (either `$CLAUDE_PLUGIN_ROOT` or `$CURSOR_PLUGIN_ROOT` is set) and
+the `claude` CLI is reachable on `$PATH`, both LLM passes are auto-enabled.
+The `llm` field in the JSON report tells you what actually ran:
+
+```json
+"llm": {
+  "sentence": { "auto": true, "ran": true },
+  "document": { "auto": true, "ran": false, "error": "claude: exit status 1: …" }
+}
+```
+
+Auto-enabled passes degrade gracefully: if `claude` isn't reachable or
+returns an error (missing auth, rate limit, timeout), the failure is
+captured in the `error` field and the client-side detectors still return
+their results. An explicit `--llm=true` still propagates errors as exit
+code 3. Pass `--llm=false` / `--llm-deep=false` to force the passes off
+under a plugin.
 
 ## Rules
 
