@@ -1,9 +1,22 @@
 package main
 
 import (
-	"path/filepath"
+	"os"
 	"testing"
 )
+
+// realExecutable returns an absolute path to a binary guaranteed to exist
+// on every supported platform: the test binary itself, reported by
+// os.Executable(). Tests that need "a binary exec.LookPath will find" use
+// this instead of hard-coding /bin/sh, which doesn't exist on Windows.
+func realExecutable(t *testing.T) string {
+	t.Helper()
+	p, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	return p
+}
 
 // Tests for the LLM auto-default logic. autoEnableLLM must require BOTH
 // a plugin-env signal AND a reachable claude binary so the CLI never
@@ -28,14 +41,7 @@ func TestAutoEnableLLM_PluginEnvButNoBinary(t *testing.T) {
 func TestAutoEnableLLM_PluginEnvAndBinary(t *testing.T) {
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "/tmp/fake-plugin")
 	t.Setenv("CURSOR_PLUGIN_ROOT", "")
-	// Stand in a real executable on PATH (test binary itself or a core
-	// util); /bin/sh is ubiquitous on unix runners. On Windows our CI
-	// matrix would use cmd.exe; the test therefore skips when /bin/sh is
-	// absent rather than asserting platform specifics.
-	if _, err := filepath.Abs("/bin/sh"); err != nil {
-		t.Skip("no /bin/sh on this platform")
-	}
-	if !autoEnableLLM("/bin/sh") {
+	if !autoEnableLLM(realExecutable(t)) {
 		t.Fatalf("autoEnableLLM should be true with plugin env + reachable bin")
 	}
 }
@@ -44,7 +50,7 @@ func TestAutoEnableLLM_CursorPluginEnvAlone(t *testing.T) {
 	// Only CURSOR_PLUGIN_ROOT set; Claude env absent. Still valid trigger.
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("CURSOR_PLUGIN_ROOT", "/tmp/fake-cursor-plugin")
-	if !autoEnableLLM("/bin/sh") {
+	if !autoEnableLLM(realExecutable(t)) {
 		t.Fatalf("autoEnableLLM should honour CURSOR_PLUGIN_ROOT as plugin signal")
 	}
 }
