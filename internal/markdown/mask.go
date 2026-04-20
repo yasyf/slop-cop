@@ -19,30 +19,25 @@ import (
 	"regexp"
 	"sort"
 
+	"github.com/yasyf/slop-cop/internal/lang"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 )
 
-// RangeKind identifies what a structural suppress Range corresponds to.
-type RangeKind int
-
+// Kind aliases exported for tests and backward-compatible package usage.
+// New code should reach for lang.KindHeading / lang.KindListItem /
+// lang.KindCodeBlock directly.
 const (
-	// KindHeading covers ATX (`# ...`) and setext (`Title\n===`) headings.
-	KindHeading RangeKind = iota + 1
-	// KindListItem covers a single item of an ordered or unordered list.
-	KindListItem
-	// KindCodeBlock covers fenced or indented code blocks. Emitted in
-	// addition to masking so callers can distinguish "inside code" hits.
-	KindCodeBlock
+	KindHeading   = lang.KindHeading
+	KindListItem  = lang.KindListItem
+	KindCodeBlock = lang.KindCodeBlock
 )
 
-// Range is a half-open byte span [Start, End) into the source.
-type Range struct {
-	Start int       `json:"start"`
-	End   int       `json:"end"`
-	Kind  RangeKind `json:"kind,omitempty"`
-}
+// Range is a half-open byte span [Start, End) into the source — the
+// markdown package's historical type, now an alias for lang.Range so every
+// analyzer speaks the same vocabulary.
+type Range = lang.Range
 
 // frontMatterRe matches a leading YAML front matter block (`---` fenced).
 // Non-greedy body, optional trailing newline after the closing fence.
@@ -158,36 +153,13 @@ func Analyze(src string) (masked string, suppress []Range, frontMatter Range) {
 	return string(buf), suppress, frontMatter
 }
 
-// Overlaps reports whether the violation range [vStart, vEnd) overlaps any
-// Range in spans whose Kind matches want. Used by the CLI to implement
-// --markdown post-filtering without pulling detector logic into this package.
-func Overlaps(vStart, vEnd int, spans []Range, want RangeKind) bool {
-	for _, s := range spans {
-		if s.Kind != want {
-			continue
-		}
-		if vStart < s.End && vEnd > s.Start {
-			return true
-		}
-	}
-	return false
-}
-
-// CountOverlapping returns how many ranges of the given kind the violation
-// span touches. Used by the staccato-burst suppression, which only drops a
-// hit when it straddles two or more consecutive list items.
-func CountOverlapping(vStart, vEnd int, spans []Range, want RangeKind) int {
-	n := 0
-	for _, s := range spans {
-		if s.Kind != want {
-			continue
-		}
-		if vStart < s.End && vEnd > s.Start {
-			n++
-		}
-	}
-	return n
-}
+// Overlaps and CountOverlapping live on the lang package. Aliased here so
+// tests and legacy callers in this package keep compiling without a
+// wide-spread import rewrite.
+var (
+	Overlaps         = lang.Overlaps
+	CountOverlapping = lang.CountOverlapping
+)
 
 // maskSpan overwrites buf[start:end] with ASCII space (0x20), preserving any
 // '\n' in the range so paragraph boundaries remain intact for downstream

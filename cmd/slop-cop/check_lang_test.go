@@ -4,48 +4,70 @@ import (
 	"testing"
 
 	"github.com/yasyf/slop-cop/internal/detectors"
-	"github.com/yasyf/slop-cop/internal/markdown"
+	"github.com/yasyf/slop-cop/internal/lang"
 	"github.com/yasyf/slop-cop/internal/types"
 )
 
-// Integration tests for the pieces the `check` command composes, exercised
-// without spawning a child process.
+// Integration tests for the language-selection and masking pipeline the
+// `check` command composes, exercised without spawning a child process.
 
-func TestResolveMarkdown_Auto(t *testing.T) {
+func TestResolveLangAutoByExtension(t *testing.T) {
 	cases := []struct {
-		mode string
 		path string
-		want bool
+		want string
 	}{
-		{"auto", "README.md", true},
-		{"auto", "README.MD", true},
-		{"auto", "doc.MarkDown", true},
-		{"auto", "page.mdx", true},
-		{"auto", "notes.txt", false},
-		{"auto", "", false},
-		{"auto", "-", false},
-		{"on", "anything.txt", true},
-		{"on", "", true},
-		{"off", "README.md", false},
+		{"README.md", "markdown"},
+		{"README.MD", "markdown"},
+		{"doc.MarkDown", "markdown"},
+		{"page.mdx", "markdown"},
+		{"index.html", "html"},
+		{"index.HTM", "html"},
+		{"app.jsx", "jsx"},
+		{"App.TSX", "tsx"},
+		{"util.ts", "ts"},
+		{"util.mts", "ts"},
+		{"util.cts", "ts"},
+		{"util.js", "js"},
+		{"util.mjs", "js"},
+		{"util.cjs", "js"},
+		{"notes.txt", "text"},
+		{"", "text"},
+		{"-", "text"},
 	}
 	for _, c := range cases {
-		got, err := resolveMarkdown(c.mode, c.path)
+		_, name, err := resolveLang("auto", c.path)
 		if err != nil {
-			t.Fatalf("resolveMarkdown(%q,%q) error: %v", c.mode, c.path, err)
+			t.Fatalf("resolveLang(auto,%q) err=%v", c.path, err)
 		}
-		if got != c.want {
-			t.Fatalf("resolveMarkdown(%q,%q) = %v, want %v", c.mode, c.path, got, c.want)
+		if name != c.want {
+			t.Fatalf("resolveLang(auto,%q) = %q, want %q", c.path, name, c.want)
 		}
 	}
 }
 
-func TestResolveMarkdown_Invalid(t *testing.T) {
-	// "auto|on|off" are the only accepted values; aliases like "yes"/"true"
-	// would mask typos, so we require strict input.
-	for _, mode := range []string{"maybe", "yes", "true", "no", "false", "1", "0"} {
-		if _, err := resolveMarkdown(mode, ""); err == nil {
-			t.Fatalf("expected error for --markdown=%q", mode)
-		}
+func TestResolveLangExplicitOverride(t *testing.T) {
+	_, name, err := resolveLang("jsx", "README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "jsx" {
+		t.Fatalf("--lang=jsx over .md should resolve to jsx; got %q", name)
+	}
+}
+
+func TestResolveLangExplicitText(t *testing.T) {
+	a, name, err := resolveLang("text", "README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a != nil || name != "text" {
+		t.Fatalf("--lang=text should yield (nil, text); got (%v, %q)", a, name)
+	}
+}
+
+func TestResolveLangInvalid(t *testing.T) {
+	if _, _, err := resolveLang("pascal", "x.md"); err == nil {
+		t.Fatal("expected error for --lang=pascal")
 	}
 }
 
@@ -90,15 +112,19 @@ Another paragraph here that contains robust prose.
 		t.Fatalf("plain mode should fire elevated-register on the unmasked code/URL 'utilize'")
 	}
 
-	// Markdown mode: mask + detect + suppress.
-	masked, suppress, _ := markdown.Analyze(src)
-	if len(masked) != len(src) {
-		t.Fatalf("markdown.Analyze broke length invariant: %d != %d", len(masked), len(src))
+	a, ok := lang.ByName("markdown")
+	if !ok || a == nil {
+		t.Fatal("markdown analyzer not registered")
 	}
-	got := markdown.ApplySuppressions(detectors.RunClient(masked), suppress, src)
+	masked, suppress, err := a.Analyze(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(masked) != len(src) {
+		t.Fatalf("Analyze broke length invariant: %d != %d", len(masked), len(src))
+	}
+	got := a.ApplySuppressions(detectors.RunClient(masked), suppress, src)
 
-	// `utilize` should survive only on the heading line (link URL, code span,
-	// and fenced block are all masked; no ref-def/autolink in this fixture).
 	elevated := 0
 	for _, v := range got {
 		if v.RuleID != "elevated-register" {
@@ -114,19 +140,16 @@ Another paragraph here that contains robust prose.
 	}
 
 	for _, v := range got {
-		// Offset invariant on every returned violation.
 		if v.StartIndex < 0 || v.EndIndex > len(src) || v.EndIndex < v.StartIndex {
 			t.Fatalf("violation %+v has out-of-range offsets for src length %d", v, len(src))
 		}
 		if src[v.StartIndex:v.EndIndex] != v.MatchedText {
 			t.Fatalf("offset invariant violated: %+v vs src slice %q", v, src[v.StartIndex:v.EndIndex])
 		}
-		// No survivor may be a dramatic-fragment on a heading or a
-		// staccato-burst across two+ list items.
-		if v.RuleID == "dramatic-fragment" && markdown.Overlaps(v.StartIndex, v.EndIndex, suppress, markdown.KindHeading) {
+		if v.RuleID == "dramatic-fragment" && lang.Overlaps(v.StartIndex, v.EndIndex, suppress, lang.KindHeading) {
 			t.Fatalf("dramatic-fragment survived on a heading span: %+v", v)
 		}
-		if v.RuleID == "staccato-burst" && markdown.CountOverlapping(v.StartIndex, v.EndIndex, suppress, markdown.KindListItem) >= 2 {
+		if v.RuleID == "staccato-burst" && lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindListItem) >= 2 {
 			t.Fatalf("staccato-burst survived across list items: %+v", v)
 		}
 	}

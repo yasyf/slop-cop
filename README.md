@@ -96,11 +96,13 @@ on stdout; diagnostics go to stderr.
 ### `check`
 
 ```bash
-# File input
+# File input (mode picked from the extension)
 slop-cop check article.md
+slop-cop check component.tsx
+slop-cop check landing.html
 
-# Stdin
-cat article.md | slop-cop check
+# Stdin (defaults to text; pass --lang to force a mode)
+cat article.md | slop-cop check --lang=markdown
 
 # With Claude-backed semantic + document passes
 slop-cop check article.md --llm --llm-deep --pretty
@@ -134,7 +136,7 @@ Flags:
 
 | Flag                 | Default                     | Purpose                                                                    |
 | -------------------- | --------------------------- | -------------------------------------------------------------------------- |
-| `--markdown`         | `auto`                      | `auto\|on\|off`. Auto enables markdown mode for `.md` / `.markdown` / `.mdx`. |
+| `--lang`             | `auto`                      | Input language: `auto\|text\|markdown\|html\|jsx\|tsx\|ts\|js`. `auto` picks by file extension; `text` for stdin. |
 | `--llm-effort`       | `auto`                      | `off\|low\|high\|auto`. Controls LLM passes. `auto` = `high` under plugin context, `off` otherwise. |
 | `--llm`              | —                           | Sugar alias for `--llm-effort=low` (sentence tier, Claude Haiku).          |
 | `--llm-deep`         | —                           | Sugar alias for `--llm-effort=high` (sentence + document tiers, Haiku + Sonnet). |
@@ -145,28 +147,52 @@ Flags:
 | `--document-timeout` | `60s`                       | Timeout for the document pass                                              |
 | `--pretty`           | off                         | Indent JSON output                                                         |
 
-### Markdown mode
+### Language modes
 
-When active (auto-detected on `.md` / `.markdown` / `.mdx`, or forced via
-`--markdown=on`), `slop-cop check`:
+Prose rarely travels alone. Most of what you want slop-cop to catch lives
+embedded in code — JSDoc blocks, string literals, JSX text children, HTML
+page copy, markdown docs. `--lang` tells slop-cop what to parse; the parser
+masks every non-prose byte with ASCII spaces before detectors run, so you
+get hits on prose and only prose.
 
-- **Masks non-prose bytes** before running detectors: fenced + indented
-  code blocks, inline code spans, link/image destinations, autolinks,
-  reference-definition lines, inline + block HTML, YAML front matter.
-  Detectors see ASCII spaces where these appeared, so `utilize` inside a
-  `` `code` `` span or a URL no longer fires `elevated-register`.
-- **Suppresses two structural false positives** via the parsed markdown
-  AST: `dramatic-fragment` on ATX/setext headings, and `staccato-burst`
-  that spans two or more consecutive list items (a bulleted list is not
-  prose cadence).
-- **Preserves byte offsets**. Violations still carry `startIndex` /
+| Mode       | Parser                       | Kept as prose                                                                   |
+| ---------- | ---------------------------- | ------------------------------------------------------------------------------- |
+| `text`     | none                         | everything — runs detectors on the raw input.                                   |
+| `markdown` | goldmark (CommonMark)        | paragraphs, headings, list-item text.                                           |
+| `html`     | `golang.org/x/net/html`      | element text. Tags, attributes, `<script>`/`<style>`/`<pre>`/`<code>` masked.   |
+| `jsx`      | tree-sitter-javascript       | comments, string literals, template quasis, JSX text.                           |
+| `tsx`      | tree-sitter-typescript (tsx) | same as jsx, plus TypeScript syntax-aware.                                      |
+| `ts`       | tree-sitter-typescript       | comments, string literals, template quasis. `<Foo>` treated as a type assertion.|
+| `js`       | tree-sitter-javascript       | comments, string literals, template quasis. No JSX.                             |
+| `auto`     | picked from file extension   | falls back to `text` for stdin or unknown extensions.                           |
+
+Auto-detection table:
+
+| Extensions                          | Mode       |
+| ----------------------------------- | ---------- |
+| `.md`, `.markdown`, `.mdx`          | `markdown` |
+| `.html`, `.htm`                     | `html`     |
+| `.jsx`                              | `jsx`      |
+| `.tsx`                              | `tsx`      |
+| `.ts`, `.mts`, `.cts`               | `ts`       |
+| `.js`, `.mjs`, `.cjs`               | `js`       |
+
+Three properties hold for every language mode:
+
+- **Byte offsets stay honest.** Violations still carry `startIndex` /
   `endIndex` into the original input, and `matchedText` is re-sliced from
   the original bytes. Consumers don't see the masking at all; they see an
   accurate, cleaner report.
+- **Length + newlines preserved.** The masked copy has the same length as
+  the input and every `\n` sits at the same offset, so line-based tooling
+  downstream stays correct.
+- **Structural suppressions.** Each mode drops the rule/kind combinations
+  that are structural false positives. `dramatic-fragment` on
+  ATX/setext/HTML headings; `staccato-burst` across two or more consecutive
+  `<li>` / list items; `dramatic-fragment` inside JSDoc `@param` / `@returns`
+  runs.
 
-Masking is a length-preserving, newline-preserving transform, so nothing
-else in the pipeline changes. Use `--markdown=off` on a `.md` file when you
-want to see every markdown-structure hit.
+Pass `--lang=text` on any file to bypass masking entirely.
 
 ### `rewrite`
 

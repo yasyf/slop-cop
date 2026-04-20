@@ -70,16 +70,20 @@ location: the plugin root is the directory two levels above this file
 
 2. **Check.** Pipe the draft on stdin:
    ```bash
-   printf '%s' "$DRAFT" | "$SLOP_COP" check --markdown -
+   printf '%s' "$DRAFT" | "$SLOP_COP" check --lang=markdown -
    ```
    `slop-cop` prints a JSON document of shape
-   `{"text_length": N, "violations": [...], "counts_by_rule": {...}, "counts_by_category": {...}, "markdown": true, "llm": {...}}`.
+   `{"text_length": N, "violations": [...], "counts_by_rule": {...}, "counts_by_category": {...}, "lang": "markdown", "llm": {...}}`.
 
-   Always pass `--markdown`. LLM drafts are typically markdown-shaped (code
-   fences, inline code, links, headings), and markdown mode masks those
-   non-prose regions so detectors only see the actual writing. It is a
-   no-op on plain prose. When checking a file path, `slop-cop check
-   article.md` already auto-activates markdown mode by extension.
+   Pass `--lang=markdown` for prose drafts on stdin. LLM drafts are
+   typically markdown-shaped (code fences, inline code, links, headings),
+   and markdown mode masks those non-prose regions so detectors only see
+   the actual writing. It is safe on plain prose. When checking a file
+   path, `slop-cop check article.md` auto-picks the mode from the
+   extension — `.md` / `.markdown` / `.mdx` → markdown, `.html` / `.htm` →
+   html, `.jsx` / `.tsx` / `.ts` / `.js` → the matching tree-sitter mode
+   (masks code so detectors only see comments, string literals, template
+   quasis, and JSX text).
 
    Running inside Claude Code or Cursor, slop-cop detects the plugin
    environment (`$CLAUDE_PLUGIN_ROOT` / `$CURSOR_PLUGIN_ROOT`) and the

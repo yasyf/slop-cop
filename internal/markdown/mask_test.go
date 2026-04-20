@@ -33,7 +33,7 @@ func assertInvariants(t *testing.T, src, masked string, suppress []Range, fm Ran
 		if r.Start < 0 || r.End > len(src) || r.Start > r.End {
 			t.Fatalf("bad suppress range %+v for src len %d", r, len(src))
 		}
-		if r.Kind == 0 {
+		if r.Kind == "" {
 			t.Fatalf("suppress range %+v has zero Kind", r)
 		}
 	}

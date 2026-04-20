@@ -10,8 +10,11 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yasyf/slop-cop/internal/detectors"
+	_ "github.com/yasyf/slop-cop/internal/htmllang" // lang registry
+	_ "github.com/yasyf/slop-cop/internal/jslang"   // lang registry
+	"github.com/yasyf/slop-cop/internal/lang"
 	"github.com/yasyf/slop-cop/internal/llm"
-	"github.com/yasyf/slop-cop/internal/markdown"
+	_ "github.com/yasyf/slop-cop/internal/markdown" // lang registry
 	"github.com/yasyf/slop-cop/internal/rules"
 	"github.com/yasyf/slop-cop/internal/types"
 )
@@ -23,9 +26,10 @@ type checkReport struct {
 	Violations       []types.Violation               `json:"violations"`
 	CountsByRule     map[string]int                  `json:"counts_by_rule"`
 	CountsByCategory map[types.ViolationCategory]int `json:"counts_by_category"`
-	// Markdown reports whether markdown-aware masking + suppression ran.
-	// Always emitted (not omitempty) so agents can tell "off" from "absent".
-	Markdown bool `json:"markdown"`
+	// Lang reports which input-language masker ran. "text" means no masking;
+	// other values ("markdown", "html", "jsx", "tsx", "ts", "js") match the
+	// registered Analyzer names in internal/lang.
+	Lang string `json:"lang"`
 	// LLMEffort is the effort level slop-cop resolved to for this run:
 	// "off", "low", or "high". Emitted alongside LLM so agents can read
 	// the setting even when no pass ran.
@@ -54,30 +58,35 @@ type llmPassStatus struct {
 	Error string `json:"error,omitempty"`
 }
 
-// markdownExts enumerates file extensions that activate markdown mode under
-// --markdown=auto. Matched case-insensitively.
-var markdownExts = map[string]bool{
-	".md":       true,
-	".markdown": true,
-	".mdx":      true,
-}
-
-// resolveMarkdown interprets the value of --markdown. The three accepted
-// values are strict: auto, on, off. Any other value is a usage error.
-func resolveMarkdown(mode, path string) (bool, error) {
-	switch strings.ToLower(mode) {
-	case "on":
-		return true, nil
-	case "off":
-		return false, nil
-	case "", "auto":
-		if path == "" || path == "-" {
-			return false, nil
-		}
-		return markdownExts[strings.ToLower(filepath.Ext(path))], nil
-	default:
-		return false, fmt.Errorf("invalid --markdown value %q (want auto|on|off)", mode)
+// resolveLang picks the lang.Analyzer for this invocation based on --lang.
+// Returns the selected Analyzer (nil for "text") and the lang name to record
+// in checkReport.Lang. "auto" detects from the file extension, falling back
+// to "text" for stdin or an unrecognised extension. An unknown explicit
+// value is a usage error.
+func resolveLang(langFlag, path string) (lang.Analyzer, string, error) {
+	pick := strings.ToLower(langFlag)
+	if pick == "" {
+		pick = "auto"
 	}
+	if pick == "auto" {
+		if path == "" || path == "-" {
+			return nil, "text", nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if a, ok := lang.ByExtension(ext); ok {
+			return a, a.Name(), nil
+		}
+		return nil, "text", nil
+	}
+	a, ok := lang.ByName(pick)
+	if !ok {
+		return nil, "", fmt.Errorf("invalid --lang value %q (want auto|text|markdown|html|jsx|tsx|ts|js)", pick)
+	}
+	if a == nil {
+		// "text" resolves to no analyzer; still a valid selection.
+		return nil, "text", nil
+	}
+	return a, a.Name(), nil
 }
 
 // llmEffort is the canonical effort level for the LLM passes.
@@ -168,7 +177,7 @@ func newCheckCmd() *cobra.Command {
 		docModel  string
 		sentTO    time.Duration
 		docTO     time.Duration
-		mdMode    string
+		langMode  string
 	)
 	cmd := &cobra.Command{
 		Use:   "check [path|-]",
@@ -192,19 +201,23 @@ are still returned); explicit passes propagate the error as exit code 3.
 Input is taken from the path argument, or from stdin when the path is "-"
 or omitted.
 
-Markdown-aware mode masks non-prose regions (code blocks, inline code, link
-and image destinations, autolinks, HTML, YAML front matter) before running
-the detectors, and suppresses a few structural false positives
-(e.g. 'dramatic-fragment' on ATX/setext headings, 'staccato-burst' across
-bulleted-list items). Activation is controlled by --markdown:
+Language-aware mode masks non-prose regions of the input before detectors
+run, so slop-cop flags prose only — not code, tags, URLs, or other syntax.
+Pick a mode with --lang:
 
-  auto   On when the input path ends in .md / .markdown / .mdx (default).
-         Off for stdin.
-  on     Force markdown mode.
-  off    Treat the input as plain text regardless of extension.`,
+  auto      (default) pick from the file extension; "text" for stdin.
+  text      no masking; treat input as plain prose.
+  markdown  CommonMark; mask code fences, links, HTML, YAML front matter.
+  html      HTML; mask tags, attributes, <script>/<style>/<pre>/<code>.
+  jsx,tsx   JS/TS with JSX; keep comments, strings, template quasis, JSX text.
+  ts,js     JS/TS without JSX.
+
+Suppressions inside masked modes drop structural false positives
+(e.g. 'dramatic-fragment' on headings, 'staccato-burst' across list items).`,
 		Example: `  slop-cop check article.md --pretty
   cat article.md | slop-cop check --llm-effort=off
-  slop-cop check - --markdown=on --llm-effort=high < article.md`,
+  slop-cop check component.tsx --lang=tsx --llm-effort=off
+  slop-cop check - --lang=markdown --llm-effort=high < article.md`,
 		Args: cobra.MaximumNArgs(1),
 	}
 	claudeBin := addClaudeBinFlag(cmd)
@@ -216,7 +229,7 @@ bulleted-list items). Activation is controlled by --markdown:
 	cmd.Flags().StringVar(&docModel, "document-model", llm.DefaultDocumentModel, "Model slug for the document pass.")
 	cmd.Flags().DurationVar(&sentTO, "sentence-timeout", llm.DefaultSentenceTimeout, "Timeout for each sentence-pass chunk.")
 	cmd.Flags().DurationVar(&docTO, "document-timeout", llm.DefaultDocumentTimeout, "Timeout for the document pass.")
-	cmd.Flags().StringVar(&mdMode, "markdown", "auto", "Treat input as markdown: auto|on|off.")
+	cmd.Flags().StringVar(&langMode, "lang", "auto", "Input language: auto|text|markdown|html|jsx|tsx|ts|js.")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		path := pathArg(args)
@@ -226,7 +239,7 @@ bulleted-list items). Activation is controlled by --markdown:
 		}
 		ctx := runContext(cmd)
 
-		mdOn, err := resolveMarkdown(mdMode, path)
+		analyzer, langName, err := resolveLang(langMode, path)
 		if err != nil {
 			return usageError{err: err}
 		}
@@ -238,14 +251,18 @@ bulleted-list items). Activation is controlled by --markdown:
 		runSentence := eff == effortLow || eff == effortHigh
 		runDocument := eff == effortHigh
 
-		// In markdown mode, detectors (and the LLM passes) run on a masked
-		// copy of the input. Offsets still index into the original bytes
-		// (Analyze preserves length), so we re-slice MatchedText from the
-		// original after filtering in ApplySuppressions.
+		// When a lang analyzer is selected, detectors (and the LLM passes)
+		// run on a masked copy of the input. Offsets still index into the
+		// original bytes (Analyze preserves length), so we re-slice
+		// MatchedText from the original in ApplySuppressions.
 		scanText := text
-		var suppress []markdown.Range
-		if mdOn {
-			scanText, suppress, _ = markdown.Analyze(text)
+		var suppress []lang.Range
+		if analyzer != nil {
+			m, s, aerr := analyzer.Analyze(text)
+			if aerr != nil {
+				return fmt.Errorf("%s: analyze: %w", analyzer.Name(), aerr)
+			}
+			scanText, suppress = m, s
 		}
 
 		violations := detectors.RunClient(scanText)
@@ -292,8 +309,8 @@ bulleted-list items). Activation is controlled by --markdown:
 			violations = detectors.Deduplicate(violations)
 		}
 
-		if mdOn {
-			violations = markdown.ApplySuppressions(violations, suppress, text)
+		if analyzer != nil {
+			violations = analyzer.ApplySuppressions(violations, suppress, text)
 		}
 
 		sortViolations(violations)
@@ -306,7 +323,7 @@ bulleted-list items). Activation is controlled by --markdown:
 			Violations:       violations,
 			CountsByRule:     map[string]int{},
 			CountsByCategory: map[types.ViolationCategory]int{},
-			Markdown:         mdOn,
+			Lang:             langName,
 			LLMEffort:        string(eff),
 			LLM:              llmRep,
 		}

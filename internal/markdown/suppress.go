@@ -1,6 +1,9 @@
 package markdown
 
-import "github.com/yasyf/slop-cop/internal/types"
+import (
+	"github.com/yasyf/slop-cop/internal/lang"
+	"github.com/yasyf/slop-cop/internal/types"
+)
 
 // ApplySuppressions drops violations that correspond to false positives on
 // markdown structural elements, and re-populates MatchedText from the
@@ -16,22 +19,20 @@ import "github.com/yasyf/slop-cop/internal/types"
 // Pass the result of Analyze(src) as `suppress` and the original source as
 // `original`. The returned slice is a fresh allocation; callers need not
 // worry about aliasing with the input.
-func ApplySuppressions(vs []types.Violation, suppress []Range, original string) []types.Violation {
+func ApplySuppressions(vs []types.Violation, suppress []lang.Range, original string) []types.Violation {
 	out := make([]types.Violation, 0, len(vs))
 	for _, v := range vs {
 		switch v.RuleID {
 		case "dramatic-fragment":
-			if Overlaps(v.StartIndex, v.EndIndex, suppress, KindHeading) {
+			if lang.Overlaps(v.StartIndex, v.EndIndex, suppress, lang.KindHeading) {
 				continue
 			}
 		case "staccato-burst":
-			if CountOverlapping(v.StartIndex, v.EndIndex, suppress, KindListItem) >= 2 {
+			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindListItem) >= 2 {
 				continue
 			}
 		}
-		if v.StartIndex >= 0 && v.EndIndex <= len(original) && v.EndIndex >= v.StartIndex {
-			v.MatchedText = original[v.StartIndex:v.EndIndex]
-		}
+		lang.RestoreMatchedText(&v, original)
 		out = append(out, v)
 	}
 	return out

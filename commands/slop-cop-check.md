@@ -31,7 +31,11 @@ Run `slop-cop check` over the target prose and summarise the findings. Does
    - The current editor selection if any is non-empty.
    - The currently focused file otherwise.
 
-3. **Invoke.** Run `slop-cop check --pretty <target>`.
+3. **Invoke.** Run `slop-cop check --pretty <target>`. slop-cop auto-detects
+   the input language from the extension (`.md` / `.html` / `.jsx` / `.tsx` /
+   `.ts` / `.js` / …) and masks non-prose regions before running detectors.
+   Pass `--lang=<mode>` to override — e.g. `--lang=text` on a code file to
+   see every regex hit, or `--lang=markdown` when reading from stdin.
 
 4. **Summarise.** Parse the JSON and present:
    - The total count and `counts_by_category` breakdown.
