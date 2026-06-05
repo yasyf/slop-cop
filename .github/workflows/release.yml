@@ -17,32 +17,45 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# slop-cop links tree-sitter (CGo), so every target must build with
+# CGO_ENABLED=1 and a C toolchain. linux/windows cross-compile from a single
+# ubuntu runner via `zig cc` (zig bundles a full cross C toolchain and produces
+# static musl Linux binaries); darwin builds natively on a macOS runner because
+# zig does not ship the macOS SDK (Go's net package needs -lresolv there).
+# FreeBSD is intentionally absent: go-tree-sitter has no freebsd support
+# (parser.go references an undefined dupeFD), so it cannot build at all.
 jobs:
   build:
     name: build ${{ matrix.goos }}/${{ matrix.goarch }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runs-on }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - goos: linux
             goarch: amd64
+            runs-on: ubuntu-latest
+            cc: zig cc -target x86_64-linux-musl
           - goos: linux
             goarch: arm64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
+            runs-on: ubuntu-latest
+            cc: zig cc -target aarch64-linux-musl
           - goos: windows
             goarch: amd64
             ext: .exe
+            runs-on: ubuntu-latest
+            cc: zig cc -target x86_64-windows-gnu
           - goos: windows
             goarch: arm64
             ext: .exe
-          - goos: freebsd
+            runs-on: ubuntu-latest
+            cc: zig cc -target aarch64-windows-gnu
+          - goos: darwin
             goarch: amd64
-          - goos: freebsd
+            runs-on: macos-latest
+          - goos: darwin
             goarch: arm64
+            runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -50,13 +63,26 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Only the cross-compiled (linux/windows) rows carry a `cc`; darwin builds
+      # with the runner's native clang.
+      - name: Setup zig
+        if: matrix.cc != ''
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
+          CGO_ENABLED: '1'
+          MATRIX_CC: ${{ matrix.cc }}
         shell: bash
         run: |
+          if [ -n "$MATRIX_CC" ]; then
+            export CC="$MATRIX_CC"
+            export CXX="${MATRIX_CC/zig cc/zig c++}"
+          fi
           version="0.1.${{ github.run_number }}"
           outdir="dist/slop-cop_${{ matrix.goos }}_${{ matrix.goarch }}"
           mkdir -p "$outdir"
@@ -78,7 +104,12 @@ jobs:
           else
             tar -czf "${base}.tar.gz" "${base}"
           fi
-          sha256sum "${base}".* > "${base}.sha256"
+          # macOS runners lack sha256sum; fall back to shasum.
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${base}".* > "${base}.sha256"
+          else
+            shasum -a 256 "${base}".* > "${base}.sha256"
+          fi
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v5
