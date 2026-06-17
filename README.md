@@ -104,6 +104,10 @@ slop-cop check landing.html
 # Stdin (defaults to text; pass --lang to force a mode)
 cat article.md | slop-cop check --lang=markdown
 
+# Only the violations beginning on the lines an edit touched
+# (the whole document is still scanned for context)
+slop-cop check README.md --lines 50:80
+
 # With Claude-backed semantic + document passes
 slop-cop check article.md --llm --llm-deep --pretty
 ```
@@ -137,6 +141,7 @@ Flags:
 | Flag                 | Default                     | Purpose                                                                    |
 | -------------------- | --------------------------- | -------------------------------------------------------------------------- |
 | `--lang`             | `auto`                      | Input language: `auto\|text\|markdown\|html\|jsx\|tsx\|ts\|js`. `auto` picks by file extension; `text` for stdin. |
+| `--lines`            | —                           | Report only violations that begin within a 1-based inclusive line range: `50:80`, `50:` (to EOF), `:80` (from line 1), or `50` (one line). Detectors still scan the whole input for context. |
 | `--llm-effort`       | `auto`                      | `off\|low\|high\|auto`. Controls LLM passes. `auto` = `high` under plugin context, `off` otherwise. |
 | `--llm`              | —                           | Sugar alias for `--llm-effort=low` (sentence tier, Claude Haiku).          |
 | `--llm-deep`         | —                           | Sugar alias for `--llm-effort=high` (sentence + document tiers, Haiku + Sonnet). |

@@ -178,6 +178,7 @@ func newCheckCmd() *cobra.Command {
 		sentTO    time.Duration
 		docTO     time.Duration
 		langMode  string
+		linesFlag string
 	)
 	cmd := &cobra.Command{
 		Use:   "check [path|-]",
@@ -213,10 +214,18 @@ Pick a mode with --lang:
   ts,js     JS/TS without JSX.
 
 Suppressions inside masked modes drop structural false positives
-(e.g. 'dramatic-fragment' on headings, 'staccato-burst' across list items).`,
+(e.g. 'dramatic-fragment' on headings, 'staccato-burst' across list items).
+
+Use --lines to report only the violations that begin within a 1-based inclusive
+line range, while still scanning the whole document for context — useful for
+linting just the lines an edit touched:
+
+  50:80  a closed range          50:  from line 50 to EOF
+  :80    from line 1 to line 80  50   a single line`,
 		Example: `  slop-cop check article.md --pretty
   cat article.md | slop-cop check --llm-effort=off
   slop-cop check component.tsx --lang=tsx --llm-effort=off
+  slop-cop check README.md --lines 50:80
   slop-cop check - --lang=markdown --llm-effort=high < article.md`,
 		Args: cobra.MaximumNArgs(1),
 	}
@@ -230,6 +239,7 @@ Suppressions inside masked modes drop structural false positives
 	cmd.Flags().DurationVar(&sentTO, "sentence-timeout", llm.DefaultSentenceTimeout, "Timeout for each sentence-pass chunk.")
 	cmd.Flags().DurationVar(&docTO, "document-timeout", llm.DefaultDocumentTimeout, "Timeout for the document pass.")
 	cmd.Flags().StringVar(&langMode, "lang", "auto", "Input language: auto|text|markdown|html|jsx|tsx|ts|js.")
+	cmd.Flags().StringVar(&linesFlag, "lines", "", "Restrict the report to a 1-based inclusive line range, e.g. 50:80 (open-ended 50: or :80; a bare 50 is one line). Detectors still run over the full input.")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		path := pathArg(args)
@@ -240,6 +250,11 @@ Suppressions inside masked modes drop structural false positives
 		ctx := runContext(cmd)
 
 		analyzer, langName, err := resolveLang(langMode, path)
+		if err != nil {
+			return usageError{err: err}
+		}
+
+		lr, hasLines, err := parseLineRange(linesFlag)
 		if err != nil {
 			return usageError{err: err}
 		}
@@ -314,6 +329,9 @@ Suppressions inside masked modes drop structural false positives
 		}
 
 		sortViolations(violations)
+		if hasLines {
+			violations = filterByLines(violations, text, lr)
+		}
 		if violations == nil {
 			violations = []types.Violation{}
 		}
