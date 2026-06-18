@@ -1,0 +1,95 @@
+version: 2
+
+project_name: slop-cop
+
+before:
+  hooks:
+    - go mod download
+
+# slop-cop links tree-sitter (cgo), so every target must build with
+# CGO_ENABLED=1 and a C toolchain. linux/windows cross-compile via `zig cc`
+# (zig bundles a full cross C toolchain: static musl Linux, mingw Windows);
+# darwin builds natively on the macOS runner with clang because zig does not
+# ship the macOS SDK. FreeBSD is intentionally absent (go-tree-sitter has no
+# freebsd support).
+builds:
+  - id: slop-cop
+    main: ./cmd/slop-cop
+    binary: slop-cop
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }}
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - "CC=zig cc -target x86_64-linux-musl"
+          - "CXX=zig c++ -target x86_64-linux-musl"
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - "CC=zig cc -target aarch64-linux-musl"
+          - "CXX=zig c++ -target aarch64-linux-musl"
+      - goos: windows
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - "CC=zig cc -target x86_64-windows-gnu"
+          - "CXX=zig c++ -target x86_64-windows-gnu"
+      - goos: windows
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - "CC=zig cc -target aarch64-windows-gnu"
+          - "CXX=zig c++ -target aarch64-windows-gnu"
+      # darwin amd64/arm64 fall through to the build-level env (CGO_ENABLED=1,
+      # native clang) with no CC override.
+
+archives:
+  - id: slop-cop
+    ids: [slop-cop]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+homebrew_casks:
+  - name: slop-cop
+    binaries:
+      - slop-cop
+    repository:
+      owner: yasyf
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/yasyf/slop-cop
+    description: Detect the rhetorical and structural tells of LLM-generated prose and emit a structured JSON report.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr",
+                           args: ["-dr", "com.apple.quarantine", "#{staged_path}/slop-cop"]
+          end
+
+release:
+  prerelease: auto
+
+changelog:
+  use: github
+  sort: asc

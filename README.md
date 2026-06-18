@@ -59,8 +59,11 @@ The plugin is the primary UI. If you want to invoke `slop-cop` directly
 from scripts, CI, pre-commit hooks, or another tool, install the binary:
 
 ```bash
+# Homebrew (macOS)
+brew install yasyf/tap/slop-cop
+
 # Prebuilt binary matching your platform
-curl -fsSL "https://github.com/yasyf/slop-cop/releases/download/latest/slop-cop_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
+curl -fsSL "https://github.com/yasyf/slop-cop/releases/latest/download/slop-cop_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
   | tar -xz -C /tmp && sudo mv /tmp/slop-cop_*/slop-cop /usr/local/bin/
 
 # Or from source
