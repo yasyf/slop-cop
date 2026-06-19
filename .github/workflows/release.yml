@@ -49,6 +49,29 @@ jobs:
           git push origin "$TAG"
           echo "GORELEASER_CURRENT_TAG=$TAG" >> "$GITHUB_ENV"
 
+      # Import the Developer ID cert into a throwaway keychain and resolve the signing
+      # identity + notary key for scripts/macos-codesign.sh (run from goreleaser's build hook).
+      - name: Import Developer ID certificate
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KP="$(openssl rand -base64 24)"
+          security create-keychain -p "$KP" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KP" "$KEYCHAIN"
+          echo -n "$MACOS_SIGN_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_SIGN_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KP" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/[\" ]//g')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+          echo "MACOS_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo -n "$MACOS_NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          echo "MACOS_NOTARY_KEY_FILE=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+
       - name: Release
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -57,9 +80,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          # Apple Developer signing + notarization (optional; no-op when unset).
-          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
-          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
-          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          # Developer ID signing + notarization (read by scripts/macos-codesign.sh).
+          MACOS_SIGN_IDENTITY: ${{ env.MACOS_SIGN_IDENTITY }}
+          MACOS_NOTARY_KEY_FILE: ${{ env.MACOS_NOTARY_KEY_FILE }}
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          MACOS_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
