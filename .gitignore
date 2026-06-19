@@ -32,3 +32,7 @@ vendor/
 
 # Bootstrap output of the plugin test; regenerated on demand
 /bin/
+
+# Zig cross-compile cache: setup-zig points ZIG_*_CACHE_DIR here, so a restored
+# cache lands in the worktree before goreleaser's dirty-tree check — ignore it.
+.zig-cache/
