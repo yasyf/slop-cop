@@ -24,6 +24,7 @@ import (
 // Mode selects one of the four supported source dialects.
 type Mode int
 
+// Source dialects recognised by the analyzer.
 const (
 	ModeJS Mode = iota
 	ModeJSX

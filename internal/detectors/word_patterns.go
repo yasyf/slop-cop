@@ -151,8 +151,9 @@ var (
 
 // ── Detectors ──────────────────────────────────────────────────────────────
 
+// DetectOverusedIntensifiers reports occurrences of the "overused-intensifiers" prose pattern in text.
 func DetectOverusedIntensifiers(text string) []types.Violation {
-	var out []types.Violation
+	out := make([]types.Violation, 0, len(intensifiers))
 	for _, w := range intensifiers {
 		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(w) + `s?\b`)
 		out = append(out, findAll(text, re, "overused-intensifiers")...)
@@ -160,8 +161,9 @@ func DetectOverusedIntensifiers(text string) []types.Violation {
 	return out
 }
 
+// DetectElevatedRegister reports occurrences of the "elevated-register" prose pattern in text.
 func DetectElevatedRegister(text string) []types.Violation {
-	var out []types.Violation
+	out := make([]types.Violation, 0, len(elevatedRegister))
 	for _, w := range elevatedRegister {
 		re := regexp.MustCompile(`(?i)\b` + escapeForRegex(w) + `\b`)
 		out = append(out, findAll(text, re, "elevated-register")...)
@@ -169,8 +171,9 @@ func DetectElevatedRegister(text string) []types.Violation {
 	return out
 }
 
+// DetectFillerAdverbs reports occurrences of the "filler-adverbs" prose pattern in text.
 func DetectFillerAdverbs(text string) []types.Violation {
-	var out []types.Violation
+	out := make([]types.Violation, 0, len(fillerAdverbs))
 	for _, w := range fillerAdverbs {
 		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(w) + `\b`)
 		out = append(out, findAll(text, re, "filler-adverbs")...)
@@ -178,16 +181,19 @@ func DetectFillerAdverbs(text string) []types.Violation {
 	return out
 }
 
+// DetectAlmostHedge reports occurrences of the "almost-hedge" prose pattern in text.
 func DetectAlmostHedge(text string) []types.Violation {
 	return findAll(text, reAlmostHedge, "almost-hedge")
 }
 
+// DetectEraOpener reports occurrences of the "era-opener" prose pattern in text.
 func DetectEraOpener(text string) []types.Violation {
 	return findAll(text, reEraOpener, "era-opener")
 }
 
+// DetectMetaphorCrutch reports occurrences of the "metaphor-crutch" prose pattern in text.
 func DetectMetaphorCrutch(text string) []types.Violation {
-	var out []types.Violation
+	out := make([]types.Violation, 0, len(metaphorCrutches))
 	for _, phrase := range metaphorCrutches {
 		// Match the TS transform: escape metacharacters, then replace escaped
 		// '.' with `[- ]?` so dotted entries double as hyphen/space variants.
@@ -199,16 +205,19 @@ func DetectMetaphorCrutch(text string) []types.Violation {
 	return out
 }
 
+// DetectImportantToNote reports occurrences of the "important-to-note" prose pattern in text.
 func DetectImportantToNote(text string) []types.Violation {
 	return findAll(text, reImportantToNote, "important-to-note")
 }
 
+// DetectBroaderImplications reports occurrences of the "broader-implications" prose pattern in text.
 func DetectBroaderImplications(text string) []types.Violation {
 	return findAll(text, reBroaderImplication, "broader-implications")
 }
 
+// DetectFalseConclusion reports occurrences of the "false-conclusion" prose pattern in text.
 func DetectFalseConclusion(text string) []types.Violation {
-	var out []types.Violation
+	out := make([]types.Violation, 0, len(falseConclusionPhrases))
 	for _, phrase := range falseConclusionPhrases {
 		re := regexp.MustCompile(`(?i)(^|[.!?]\s+|\n\s*)` + escapeForRegex(phrase) + `\b`)
 		out = append(out, findAll(text, re, "false-conclusion")...)
@@ -216,8 +225,9 @@ func DetectFalseConclusion(text string) []types.Violation {
 	return out
 }
 
+// DetectConnectorAddiction reports occurrences of the "connector-addiction" prose pattern in text.
 func DetectConnectorAddiction(text string) []types.Violation {
-	var out []types.Violation
+	out := make([]types.Violation, 0, len(connectorWords))
 	for _, w := range connectorWords {
 		re := regexp.MustCompile(`(?i)(^|\n\s*|[.!?]\s+)` + escapeForRegex(w) + `[,\s]`)
 		out = append(out, findAll(text, re, "connector-addiction")...)
@@ -225,8 +235,9 @@ func DetectConnectorAddiction(text string) []types.Violation {
 	return out
 }
 
+// DetectUnnecessaryContrast reports occurrences of the "unnecessary-contrast" prose pattern in text.
 func DetectUnnecessaryContrast(text string) []types.Violation {
-	var out []types.Violation
+	out := make([]types.Violation, 0, len(unnecessaryContrastPhrases))
 	for _, phrase := range unnecessaryContrastPhrases {
 		re := regexp.MustCompile(`(?i)\b` + escapeForRegex(phrase) + `\b`)
 		out = append(out, findAll(text, re, "unnecessary-contrast")...)
@@ -234,6 +245,7 @@ func DetectUnnecessaryContrast(text string) []types.Violation {
 	return out
 }
 
+// DetectEmDashPivot reports occurrences of the "em-dash-pivot" prose pattern in text.
 func DetectEmDashPivot(text string) []types.Violation {
 	var out []types.Violation
 	for _, idx := range reDash.FindAllStringIndex(text, -1) {
@@ -259,18 +271,21 @@ func DetectEmDashPivot(text string) []types.Violation {
 
 // negationPivotNEG lists the negation forms used in the inline and two-clause
 // variants. Unicode apostrophes handled the same way the TS source does.
-const negationsClass = `not|don[\x{2019}']?t|doesn[\x{2019}']?t|isn[\x{2019}']?t|wasn[\x{2019}']?t|aren[\x{2019}']?t|do not|does not|is not|was not|never|no longer`
-const twoSentenceNEG = `(?:doesn[\x{2019}']?t|isn[\x{2019}']?t|won[\x{2019}']?t|can[\x{2019}']?t|don[\x{2019}']?t|does\s+not|is\s+not|was\s+not|did\s+not|will\s+not)`
+const (
+	negationsClass = `not|don[\x{2019}']?t|doesn[\x{2019}']?t|isn[\x{2019}']?t|wasn[\x{2019}']?t|aren[\x{2019}']?t|do not|does not|is not|was not|never|no longer`
+	twoSentenceNEG = `(?:doesn[\x{2019}']?t|isn[\x{2019}']?t|won[\x{2019}']?t|can[\x{2019}']?t|don[\x{2019}']?t|does\s+not|is\s+not|was\s+not|did\s+not|will\s+not)`
+)
 
 var (
-	reNegationComma   = regexp.MustCompile(`(?i)\b(?:` + negationsClass + `)\b[^.!?\n]{3,80},?\s+but\b`)
-	reNegationEmDash  = regexp.MustCompile(`(?i)\b(?:` + negationsClass + `)\b[^.!?\n\x{2014}\x{2013}]{3,60}[\x{2014}\x{2013}]\s*\w+`)
+	reNegationComma  = regexp.MustCompile(`(?i)\b(?:` + negationsClass + `)\b[^.!?\n]{3,80},?\s+but\b`)
+	reNegationEmDash = regexp.MustCompile(`(?i)\b(?:` + negationsClass + `)\b[^.!?\n\x{2014}\x{2013}]{3,60}[\x{2014}\x{2013}]\s*\w+`)
 	// First clause of the two-sentence variant. The subject ([A-Z]\w*) is
 	// captured so we can look for a matching second clause that reopens with
 	// the same subject (RE2 has no backreferences, so we stitch by hand).
 	reNegationTwoFirst = regexp.MustCompile(`([A-Z][\w\x{2019}']*)\s+` + twoSentenceNEG + `\b[^.!?\n]{5,120}[.!?]`)
 )
 
+// DetectNegationPivot reports occurrences of the "negation-pivot" prose pattern in text.
 func DetectNegationPivot(text string) []types.Violation {
 	var out []types.Violation
 	for _, re := range []*regexp.Regexp{reNegationComma, reNegationEmDash} {
@@ -313,6 +328,7 @@ func DetectNegationPivot(text string) []types.Violation {
 	return out
 }
 
+// DetectColonElaboration reports occurrences of the "colon-elaboration" prose pattern in text.
 func DetectColonElaboration(text string) []types.Violation {
 	var out []types.Violation
 	for _, idx := range reColonElab.FindAllStringIndex(text, -1) {
@@ -331,6 +347,7 @@ func DetectColonElaboration(text string) []types.Violation {
 	return out
 }
 
+// DetectParentheticalQualifier reports occurrences of the "parenthetical-qualifier" prose pattern in text.
 func DetectParentheticalQualifier(text string) []types.Violation {
 	out := findAll(text, reParenQualifier, "parenthetical-qualifier")
 	for _, phrase := range commaQualifiers {
@@ -340,6 +357,7 @@ func DetectParentheticalQualifier(text string) []types.Violation {
 	return out
 }
 
+// DetectQuestionThenAnswer reports occurrences of the "question-then-answer" prose pattern in text.
 func DetectQuestionThenAnswer(text string) []types.Violation {
 	var out []types.Violation
 	sentenceAny := regexp.MustCompile(`[^.!?]*[.!?]+`)
@@ -375,6 +393,7 @@ func DetectQuestionThenAnswer(text string) []types.Violation {
 
 var hedgeModals = []string{"might", "could", "may"}
 
+// DetectHedgeStack reports occurrences of the "hedge-stack" prose pattern in text.
 func DetectHedgeStack(text string) []types.Violation {
 	var out []types.Violation
 	sentences := splitSentences(text)
@@ -411,6 +430,7 @@ func DetectHedgeStack(text string) []types.Violation {
 	return out
 }
 
+// DetectStaccatoBurst reports occurrences of the "staccato-burst" prose pattern in text.
 func DetectStaccatoBurst(text string) []types.Violation {
 	var out []types.Violation
 	for _, p := range splitParagraphs(text) {
@@ -451,6 +471,7 @@ func DetectStaccatoBurst(text string) []types.Violation {
 	return out
 }
 
+// DetectListicleInstinct reports occurrences of the "listicle-instinct" prose pattern in text.
 func DetectListicleInstinct(text string) []types.Violation {
 	var out []types.Violation
 	magic := map[int]bool{3: true, 5: true, 7: true, 10: true}
@@ -494,10 +515,12 @@ func DetectListicleInstinct(text string) []types.Violation {
 	return out
 }
 
+// DetectServesAs reports occurrences of the "serves-as" prose pattern in text.
 func DetectServesAs(text string) []types.Violation {
 	return findAll(text, reServesAs, "serves-as")
 }
 
+// DetectNegationCountdown reports occurrences of the "negation-countdown" prose pattern in text.
 func DetectNegationCountdown(text string) []types.Violation {
 	var out []types.Violation
 	sentences := splitSentences(text)
@@ -549,6 +572,7 @@ var anaphoraTwoWordSkip = map[string]bool{
 
 var anaphoraConjunctions = map[string]bool{"and": true, "but": true, "or": true}
 
+// DetectAnaphoraAbuse reports occurrences of the "anaphora-abuse" prose pattern in text.
 func DetectAnaphoraAbuse(text string) []types.Violation {
 	var out []types.Violation
 	sentences := splitSentences(text)
@@ -640,6 +664,7 @@ func DetectAnaphoraAbuse(text string) []types.Violation {
 	return out
 }
 
+// DetectGerundLitany reports occurrences of the "gerund-litany" prose pattern in text.
 func DetectGerundLitany(text string) []types.Violation {
 	var out []types.Violation
 	sentences := splitSentences(text)
@@ -679,21 +704,26 @@ func DetectGerundLitany(text string) []types.Violation {
 	return out
 }
 
+// DetectHeresTheKicker reports occurrences of the "heres-the-kicker" prose pattern in text.
 func DetectHeresTheKicker(text string) []types.Violation {
 	return detectLowerPhraseList(text, heresTheKickerPhrases, "heres-the-kicker")
 }
 
+// DetectPedagogicalAside reports occurrences of the "pedagogical-aside" prose pattern in text.
 func DetectPedagogicalAside(text string) []types.Violation {
 	return detectLowerPhraseList(text, pedagogicalPhrases, "pedagogical-aside")
 }
 
+// DetectImagineWorld reports occurrences of the "imagine-world" prose pattern in text.
 func DetectImagineWorld(text string) []types.Violation {
 	return findAll(text, reImagineWorld, "imagine-world")
 }
 
+// DetectListicleTrenchCoat reports occurrences of the "listicle-trench-coat" prose pattern in text.
 func DetectListicleTrenchCoat(text string) []types.Violation {
-	var out []types.Violation
-	for _, m := range reListicleTrench.FindAllStringSubmatchIndex(text, -1) {
+	matches := reListicleTrench.FindAllStringSubmatchIndex(text, -1)
+	out := make([]types.Violation, 0, len(matches))
+	for _, m := range matches {
 		prefixStart, prefixEnd := m[2], m[3]
 		var prefixLen int
 		if prefixStart >= 0 {
@@ -712,26 +742,32 @@ func DetectListicleTrenchCoat(text string) []types.Violation {
 	return out
 }
 
+// DetectVagueAttribution reports occurrences of the "vague-attribution" prose pattern in text.
 func DetectVagueAttribution(text string) []types.Violation {
 	return detectLowerPhraseList(text, vagueAttributionPhrases, "vague-attribution")
 }
 
+// DetectBoldFirstBullets reports occurrences of the "bold-first-bullets" prose pattern in text.
 func DetectBoldFirstBullets(text string) []types.Violation {
 	return findAll(text, reBoldFirstBullet, "bold-first-bullets")
 }
 
+// DetectUnicodeArrows reports occurrences of the "unicode-arrows" prose pattern in text.
 func DetectUnicodeArrows(text string) []types.Violation {
 	return findAll(text, reUnicodeArrow, "unicode-arrows")
 }
 
+// DetectDespiteChallenges reports occurrences of the "despite-challenges" prose pattern in text.
 func DetectDespiteChallenges(text string) []types.Violation {
 	return findAll(text, reDespite, "despite-challenges")
 }
 
+// DetectConceptLabel reports occurrences of the "concept-label" prose pattern in text.
 func DetectConceptLabel(text string) []types.Violation {
 	return findAll(text, reConceptLabel, "concept-label")
 }
 
+// DetectDramaticFragment reports occurrences of the "dramatic-fragment" prose pattern in text.
 func DetectDramaticFragment(text string) []types.Violation {
 	var out []types.Violation
 	paras := splitParagraphs(text)
@@ -764,12 +800,14 @@ func DetectDramaticFragment(text string) []types.Violation {
 	return out
 }
 
+// DetectSuperficialAnalysis reports occurrences of the "superficial-analysis" prose pattern in text.
 func DetectSuperficialAnalysis(text string) []types.Violation {
 	return findAll(text, reSuperficial, "superficial-analysis")
 }
 
 var reFalseRange = regexp.MustCompile(`(?i)(?:(?:doesn[\x{2019}']?t|didn[\x{2019}']?t|don[\x{2019}']?t|does\s+not|did\s+not|isn[\x{2019}']?t|wasn[\x{2019}']?t|aren[\x{2019}']?t|is\s+not|was\s+not)\s+)?(?:emerge[sd]?|comes?|came|appear[sed]*|spring[s]?|sprung|arose?|arise[s]?|materialize[sd]?|happen[sed]*|develop[sed]*|exist[sed]*)\s+from\s+nowhere`)
 
+// DetectFalseRange reports occurrences of the "false-range" prose pattern in text.
 func DetectFalseRange(text string) []types.Violation {
 	return findAll(text, reFalseRange, "false-range")
 }
@@ -799,7 +837,7 @@ func detectLowerPhraseList(text string, phrases []string, ruleID string) []types
 	return out
 }
 
-// isDramaticLead mirrors the TS regex /^[A-Z0-9\-–—"''""\[]/ — runes that
+// isDramaticLead mirrors the TS regex /^[A-Z0-9\-–—"”""\[]/ — runes that
 // could head a "title-like" single-line paragraph.
 func isDramaticLead(r rune) bool {
 	if r == 0 {

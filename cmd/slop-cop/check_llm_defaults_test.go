@@ -43,11 +43,11 @@ func TestPluginEnvActive(t *testing.T) {
 
 func TestAutoEnableLLM(t *testing.T) {
 	cases := []struct {
-		name    string
-		claude  string
-		cEnv    string
-		curEnv  string
-		want    bool
+		name   string
+		claude string
+		cEnv   string
+		curEnv string
+		want   bool
 	}{
 		{"no env, no bin", "nonexistent-binary-xyzzy", "", "", false},
 		{"claude env, missing bin", "nonexistent-binary-xyzzy", "/tmp/fake", "", false},

@@ -7,16 +7,6 @@ import (
 	"github.com/yasyf/slop-cop/internal/types"
 )
 
-type fakeAnalyzer struct{ name string }
-
-func (f *fakeAnalyzer) Name() string { return f.name }
-func (f *fakeAnalyzer) Analyze(src string) (string, []lang.Range, error) {
-	return src, nil, nil
-}
-func (f *fakeAnalyzer) ApplySuppressions(vs []types.Violation, _ []lang.Range, _ string) []types.Violation {
-	return vs
-}
-
 func TestTextResolvesToNil(t *testing.T) {
 	a, ok := lang.ByName("text")
 	if !ok {

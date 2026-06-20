@@ -24,7 +24,7 @@ func TestAnalyze_Fixture(t *testing.T) {
 	fixturePath := filepath.Join("testdata", "fixture.md")
 	goldenPath := filepath.Join("testdata", "fixture.md.golden")
 
-	raw, err := os.ReadFile(fixturePath)
+	raw, err := os.ReadFile(fixturePath) //nolint:gosec // G304: fixturePath is a fixed testdata path, not user input.
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
@@ -55,13 +55,13 @@ func TestAnalyze_Fixture(t *testing.T) {
 	out = append(out, '\n')
 
 	if *updateGolden {
-		if err := os.WriteFile(goldenPath, out, 0o644); err != nil {
+		if err := os.WriteFile(goldenPath, out, 0o600); err != nil {
 			t.Fatalf("write golden: %v", err)
 		}
 		return
 	}
 
-	want, err := os.ReadFile(goldenPath)
+	want, err := os.ReadFile(goldenPath) //nolint:gosec // G304: goldenPath is a fixed testdata path, not user input.
 	if err != nil {
 		t.Fatalf("read golden (run with -update to create): %v", err)
 	}

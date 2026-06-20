@@ -13,10 +13,10 @@ import (
 
 // exit codes
 const (
-	exitOK        = 0
-	exitIO        = 2
-	exitLLM       = 3
-	exitUsage     = 4
+	exitOK    = 0
+	exitIO    = 2
+	exitLLM   = 3
+	exitUsage = 4
 )
 
 // usageError wraps a flag/argument validation problem so we can map it to

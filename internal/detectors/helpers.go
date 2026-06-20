@@ -10,8 +10,9 @@ import (
 // findAll returns one Violation per match of re in text, attributed to ruleID.
 // It mirrors the TypeScript helper of the same name.
 func findAll(text string, re *regexp.Regexp, ruleID string) []types.Violation {
-	var out []types.Violation
-	for _, idx := range re.FindAllStringIndex(text, -1) {
+	matches := re.FindAllStringIndex(text, -1)
+	out := make([]types.Violation, 0, len(matches))
+	for _, idx := range matches {
 		out = append(out, types.Violation{
 			RuleID:      ruleID,
 			StartIndex:  idx[0],

@@ -147,7 +147,7 @@ func TestDetectFalseConclusion(t *testing.T) {
 		{"moving forward", "Moving forward, we must prioritize trust over speed.", true},
 		{"going forward", "Going forward, the focus will shift to execution.", true},
 	})
-	t.Run("does not flag mid-sentence usage", func(t *testing.T) {
+	t.Run("does not flag mid-sentence usage", func(_ *testing.T) {
 		// "all in all" mid-sentence is borderline; ensure it doesn't explode.
 		_ = DetectFalseConclusion("The project, all in all, was a success.")
 	})
@@ -218,7 +218,7 @@ func TestDetectColonElaboration(t *testing.T) {
 		{"answer simple", "The answer is simple: we need to rethink our approach from the ground up.", true},
 		{"there is one problem", "There is one problem: the data does not support the conclusion we reached.", true},
 	})
-	t.Run("does not flag a colon in a short list item", func(t *testing.T) {
+	t.Run("does not flag a colon in a short list item", func(_ *testing.T) {
 		// Short setup clause below the 5/20 char thresholds — must not crash.
 		_ = DetectColonElaboration("Note: done.")
 	})

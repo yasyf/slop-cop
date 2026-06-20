@@ -21,7 +21,7 @@ func newRulesCmd() *cobra.Command {
 	cmd.Flags().StringVar(&category, "category", "", "Filter by category (word-choice, sentence-structure, rhetorical, structural, framing).")
 	cmd.Flags().BoolVar(&llmOnly, "llm-only", false, "Only show rules that require the LLM passes.")
 
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		filtered := make([]types.ViolationRule, 0, len(rules.All))
 		for _, r := range rules.All {
 			if category != "" && string(r.Category) != category {

@@ -10,10 +10,12 @@ import (
 
 // Prompts ported 1:1 from src/detectors/llmDetectors.ts.
 
+// SentenceSystemPrompt is the system prompt for the per-sentence LLM pass.
 const SentenceSystemPrompt = `You are an expert editor analyzing text for LLM-generated prose patterns.
 You will be given a passage and asked to identify specific rhetorical and structural tells.
 Be conservative — only flag clear, unambiguous instances.`
 
+// DocumentSystemPrompt is the system prompt for the whole-document LLM pass.
 const DocumentSystemPrompt = `You are an experienced editor reading a complete piece of writing to identify structural and compositional problems that only become visible at document scale — patterns that emerge across paragraphs rather than within a single sentence.
 Be conservative — only flag clear, unambiguous cases.`
 

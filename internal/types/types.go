@@ -9,6 +9,7 @@ package types
 // ViolationCategory groups related rules.
 type ViolationCategory string
 
+// Violation categories.
 const (
 	CategoryWordChoice        ViolationCategory = "word-choice"
 	CategorySentenceStructure ViolationCategory = "sentence-structure"
@@ -20,6 +21,7 @@ const (
 // LLMTier identifies which LLM pass produces a rule's detections.
 type LLMTier string
 
+// LLM pass tiers.
 const (
 	LLMTierSentence LLMTier = "sentence"
 	LLMTierDocument LLMTier = "document"

@@ -6,6 +6,7 @@
 package htmllang
 
 import (
+	"errors"
 	"io"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 // Analyzer is the HTML implementation of lang.Analyzer.
 type Analyzer struct{}
 
+// Name returns the analyzer's language identifier.
 func (Analyzer) Name() string { return "html" }
 
 // rawTextTags names elements whose text content should be masked even though
@@ -37,6 +39,8 @@ var headingTags = map[string]bool{
 	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
 }
 
+// Analyze masks HTML source so only prose text content remains visible,
+// returning the masked text and the suppression ranges for non-prose spans.
 func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 	buf := []byte(src)
 	masked := append([]byte(nil), buf...)
@@ -48,9 +52,9 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 	z.SetMaxBuf(0)
 
 	offset := 0
-	var rawDepth int          // >0 when the current text is inside script/style/pre/code/...
-	var headingDepth int      // >0 when currently inside h1-h6
-	var liDepth int           // >0 when currently inside <li>
+	var rawDepth int     // >0 when the current text is inside script/style/pre/code/...
+	var headingDepth int // >0 when currently inside h1-h6
+	var liDepth int      // >0 when currently inside <li>
 	for {
 		tt := z.Next()
 		raw := z.Raw()
@@ -59,7 +63,7 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 		offset = end
 
 		if tt == html.ErrorToken {
-			if z.Err() == io.EOF {
+			if errors.Is(z.Err(), io.EOF) {
 				break
 			}
 			// Malformed HTML: mask the remainder defensively and stop.
@@ -118,6 +122,8 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 	return string(masked), suppress, nil
 }
 
+// ApplySuppressions drops violations that fall inside suppressed HTML spans
+// (headings, list items) and restores their matched text from the original.
 func (Analyzer) ApplySuppressions(vs []types.Violation, suppress []lang.Range, original string) []types.Violation {
 	out := make([]types.Violation, 0, len(vs))
 	for _, v := range vs {

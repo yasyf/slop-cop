@@ -50,7 +50,7 @@ func RunClient(text string) []types.Violation {
 		DetectSuperficialAnalysis,
 		DetectFalseRange,
 	}
-	var all []types.Violation
+	all := make([]types.Violation, 0, len(detectors))
 	for _, d := range detectors {
 		all = append(all, d(text)...)
 	}

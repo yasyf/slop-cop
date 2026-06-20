@@ -19,7 +19,7 @@ func newVersionCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 	pretty := addPrettyFlag(cmd)
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		v, c := buildMetadata()
 		return writeJSON(map[string]string{"version": v, "commit": c}, *pretty)
 	}

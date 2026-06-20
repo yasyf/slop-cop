@@ -1,0 +1,10 @@
+# Commit-time checks for Go: gofumpt + goimports formatting and golangci-lint.
+# Run by prek — a fast Rust drop-in for pre-commit that reads this file unchanged.
+# Activate once per clone:  uvx prek install
+# The rev pins the golangci-lint version; bump it with `uvx prek autoupdate`.
+repos:
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.12.2
+    hooks:
+      - id: golangci-lint-fmt
+      - id: golangci-lint

@@ -31,13 +31,13 @@ type Config struct {
 // resultEnvelope is the top-level shape printed by `claude -p --output-format json`.
 // Fields unused by slop-cop are deliberately omitted.
 type resultEnvelope struct {
-	Type       string          `json:"type"`
-	Subtype    string          `json:"subtype"`
-	IsError    bool            `json:"is_error"`
-	Result     json.RawMessage `json:"result"`
+	Type             string          `json:"type"`
+	Subtype          string          `json:"subtype"`
+	IsError          bool            `json:"is_error"`
+	Result           json.RawMessage `json:"result"`
 	StructuredResult json.RawMessage `json:"structured_result"`
-	Error      string          `json:"error"`
-	SessionID  string          `json:"session_id"`
+	Error            string          `json:"error"`
+	SessionID        string          `json:"session_id"`
 }
 
 // RunSchema invokes claude with a JSON-schema constraint on the response and
@@ -70,7 +70,7 @@ func RunSchema(ctx context.Context, cfg Config, system, user string, schema json
 	args = append(args, cfg.ExtraArgs...)
 	args = append(args, user)
 
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // G204: bin and args are the configured LLM CLI invocation this provider exists to run.
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

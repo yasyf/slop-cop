@@ -10,13 +10,18 @@ import (
 // the lang registry instead (lang.ByName / lang.ByExtension).
 type Analyzer struct{}
 
+// Name returns the analyzer's language identifier.
 func (Analyzer) Name() string { return "markdown" }
 
+// Analyze masks markdown source so only prose remains visible, returning the
+// masked text and the suppression ranges for non-prose spans.
 func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 	masked, suppress, _ := Analyze(src)
 	return masked, suppress, nil
 }
 
+// ApplySuppressions drops violations that fall inside suppressed markdown spans
+// and restores their matched text from the original.
 func (Analyzer) ApplySuppressions(vs []types.Violation, suppress []lang.Range, original string) []types.Violation {
 	return ApplySuppressions(vs, suppress, original)
 }

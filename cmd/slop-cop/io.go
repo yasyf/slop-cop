@@ -16,7 +16,7 @@ func readInput(path string) (string, error) {
 		}
 		return string(b), nil
 	}
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) //nolint:gosec // G304: path is the user-supplied file argument this CLI is designed to read.
 	if err != nil {
 		return "", fmt.Errorf("reading %s: %w", path, err)
 	}
