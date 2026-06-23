@@ -22,11 +22,7 @@ On the first draft, the skill runs `scripts/install-binary.sh` (or `.ps1` on Win
 To invoke `slop-cop` directly from CI, pre-commit hooks, or scripts, install the binary:
 
 ```bash
-# Homebrew (macOS)
 brew install yasyf/tap/slop-cop
-
-# Or from source
-go install github.com/yasyf/slop-cop/cmd/slop-cop@latest
 ```
 
 The `--llm` modes and `rewrite` additionally require the [`claude`](https://docs.claude.com/en/docs/claude-code/overview) CLI on `$PATH`. slop-cop never needs an Anthropic API key — `claude -p` uses your Claude subscription.
