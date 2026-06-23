@@ -1,121 +1,41 @@
 # slop-cop
 
-A Go CLI that detects the rhetorical and structural tells of LLM-generated
-prose and emits a structured JSON report. Designed for automated agent
-consumption, not humans. No TUI, no highlighting, no interactive prompts.
+A Go CLI that detects the rhetorical and structural tells of LLM-generated prose and emits a structured JSON report.
 
-Ships with a plug-and-play **skill** for Claude Code and Cursor: the agent
-runs `slop-cop` on its own prose drafts and silently revises before replying.
-The binary auto-installs on first use, so Go is not required.
+Built for agents, not humans: no TUI, no highlighting, no prompts — just JSON on stdout, diagnostics on stderr. It ships with a plug-and-play skill so a coding agent runs `slop-cop` on its own drafts and silently revises before replying.
 
-## Install the plugin (recommended)
+## Install
 
-Most people will use slop-cop through their coding agent. The skill activates
-whenever you ask the agent to write, edit, or polish prose (blog posts,
-docs, PR descriptions, commit messages, release notes, emails).
+Most people use slop-cop through their coding agent. The skill activates whenever you ask the agent to write, edit, or polish prose.
 
-### Claude Code
+**Claude Code:**
 
 ```
 /plugin marketplace add yasyf/slop-cop
 /plugin install slop-cop@slop-cop
 ```
 
-### Cursor
+**Cursor:** open the Plugins panel and install from Git URL `https://github.com/yasyf/slop-cop`.
 
-Open the Plugins panel and install from Git URL:
-`https://github.com/yasyf/slop-cop`.
+On the first draft, the skill runs `scripts/install-binary.sh` (or `.ps1` on Windows) to download the prebuilt binary for your platform from the rolling [`latest`](https://github.com/yasyf/slop-cop/releases/tag/latest) release. No Go toolchain required. Verify end-to-end with [`scripts/test-plugin.sh`](scripts/test-plugin.sh).
 
-### First use
-
-On the first draft the skill sees, it runs `scripts/install-binary.sh`
-(or `.ps1` on Windows) which downloads the right prebuilt binary for your
-platform from the rolling [`latest`](https://github.com/yasyf/slop-cop/releases/tag/latest)
-GitHub Release and drops it into the plugin directory. Subsequent runs
-reuse the cached binary. No Go toolchain required.
-
-Verify end-to-end with [`scripts/test-plugin.sh`](scripts/test-plugin.sh),
-which spawns a `claude -p` subshell with `--plugin-dir` pointed at a local
-checkout and asserts the skill activated.
-
-## What the skill does
-
-Given any prose the agent is about to return, the skill:
-
-1. Resolves (or auto-downloads) the `slop-cop` binary inside the plugin.
-2. Pipes the draft through `slop-cop check -`, getting back a JSON list of
-   violations across 48 rules: overused intensifiers, filler adverbs,
-   em-dash abuse, negation pivots, metaphor crutches, throat-clearing,
-   hedge stacks, and more.
-3. Revises and re-runs until the report is clean.
-4. Returns the revised draft to you, without narrating the process.
-
-See [`skills/slop-cop-prose/SKILL.md`](skills/slop-cop-prose/SKILL.md) for
-the exact instructions the agent receives.
-
-## Direct CLI install (for CI + scripting)
-
-The plugin is the primary UI. If you want to invoke `slop-cop` directly
-from scripts, CI, pre-commit hooks, or another tool, install the binary:
+To invoke `slop-cop` directly from CI, pre-commit hooks, or scripts, install the binary:
 
 ```bash
 # Homebrew (macOS)
 brew install yasyf/tap/slop-cop
 
-# Prebuilt binary matching your platform
-curl -fsSL "https://github.com/yasyf/slop-cop/releases/latest/download/slop-cop_$(uname -s | tr A-Z a-z)_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
-  | tar -xz -C /tmp && sudo mv /tmp/slop-cop_*/slop-cop /usr/local/bin/
-
 # Or from source
 go install github.com/yasyf/slop-cop/cmd/slop-cop@latest
 ```
 
-The `--llm` / `--llm-deep` and `rewrite` modes additionally require the
-[`claude`](https://docs.claude.com/en/docs/claude-code/overview) CLI on
-`$PATH`; slop-cop never needs an Anthropic API key of its own because
-`claude -p` uses your Claude subscription.
+The `--llm` modes and `rewrite` additionally require the [`claude`](https://docs.claude.com/en/docs/claude-code/overview) CLI on `$PATH`. slop-cop never needs an Anthropic API key — `claude -p` uses your Claude subscription.
 
-## Usage
-
-```
-slop-cop [command]
-
-Commands:
-  check [path|-]      Run detectors; emit JSON report.
-  rewrite [path|-]    Rewrite a paragraph via `claude -p`.
-  rules               Print the full rule catalogue as JSON.
-  version             Print build metadata as JSON.
-
-Exit codes:
-  0  success (including "no violations found")
-  2  input/IO error
-  3  claude subprocess error
-  4  flag/usage error
-```
-
-Input is the positional argument (`-` or omitted for stdin). Output is JSON
-on stdout; diagnostics go to stderr.
-
-### `check`
+## Quickstart
 
 ```bash
-# File input (mode picked from the extension)
-slop-cop check article.md
-slop-cop check component.tsx
-slop-cop check landing.html
-
-# Stdin (defaults to text; pass --lang to force a mode)
-cat article.md | slop-cop check --lang=markdown
-
-# Only the violations beginning on the lines an edit touched
-# (the whole document is still scanned for context)
-slop-cop check README.md --lines 50:80
-
-# With Claude-backed semantic + document passes
-slop-cop check article.md --llm --llm-deep --pretty
+slop-cop check article.md --pretty
 ```
-
-Example output (trimmed):
 
 ```json
 {
@@ -126,263 +46,35 @@ Example output (trimmed):
       "startIndex": 0,
       "endIndex": 12,
       "matchedText": "In an era of"
-    },
-    {
-      "ruleId": "important-to-note",
-      "startIndex": 27,
-      "endIndex": 50,
-      "matchedText": "it is important to note"
     }
   ],
-  "counts_by_rule": { "era-opener": 1, "important-to-note": 1 },
-  "counts_by_category": { "rhetorical": 1, "word-choice": 1 }
+  "counts_by_rule": { "era-opener": 1 },
+  "counts_by_category": { "rhetorical": 1 }
 }
 ```
 
-Flags:
+Input is the positional argument (`-` or omitted for stdin). The mode is picked from the file extension; pass `--lang` to force one (`text`, `markdown`, `html`, `jsx`, `tsx`, `ts`, `js`). Add `--llm` for Claude-backed semantic passes and `--lines 50:80` to report only violations beginning in an edited range.
 
-| Flag                 | Default                     | Purpose                                                                    |
-| -------------------- | --------------------------- | -------------------------------------------------------------------------- |
-| `--lang`             | `auto`                      | Input language: `auto\|text\|markdown\|html\|jsx\|tsx\|ts\|js`. `auto` picks by file extension; `text` for stdin. |
-| `--lines`            | —                           | Report only violations that begin within a 1-based inclusive line range: `50:80`, `50:` (to EOF), `:80` (from line 1), or `50` (one line). Detectors still scan the whole input for context. |
-| `--llm-effort`       | `auto`                      | `off\|low\|high\|auto`. Controls LLM passes. `auto` = `high` under plugin context, `off` otherwise. |
-| `--llm`              | —                           | Sugar alias for `--llm-effort=low` (sentence tier, Claude Haiku).          |
-| `--llm-deep`         | —                           | Sugar alias for `--llm-effort=high` (sentence + document tiers, Haiku + Sonnet). |
-| `--claude-bin`       | `claude`                    | Path to the `claude` CLI                                                   |
-| `--sentence-model`   | `claude-haiku-4-5-20251001` | Model slug for `--llm`                                                     |
-| `--document-model`   | `claude-sonnet-4-6`         | Model slug for `--llm-deep`                                                |
-| `--sentence-timeout` | `30s`                       | Timeout per sentence-pass chunk                                            |
-| `--document-timeout` | `60s`                       | Timeout for the document pass                                              |
-| `--pretty`           | off                         | Indent JSON output                                                         |
+## Commands
 
-### Language modes
+| Command | What it does |
+| --- | --- |
+| `check [path\|-]` | Run detectors; emit a JSON violation report. |
+| `rewrite [path\|-]` | Rewrite a paragraph via `claude -p`, optionally targeting `--rules`. |
+| `rules` | Print the rule catalogue as JSON (`--category`, `--llm-only`). |
+| `version` | Print build metadata as JSON. |
 
-Prose rarely travels alone. Most of what you want slop-cop to catch lives
-embedded in code — JSDoc blocks, string literals, JSX text children, HTML
-page copy, markdown docs. `--lang` tells slop-cop what to parse; the parser
-masks every non-prose byte with ASCII spaces before detectors run, so you
-get hits on prose and only prose.
+Run `slop-cop check --help` for the full flag list, or `slop-cop rules --pretty` for the rule taxonomy. Exit codes: `0` success, `2` input/IO error, `3` claude subprocess error, `4` usage error.
 
-| Mode       | Parser                       | Kept as prose                                                                   |
-| ---------- | ---------------------------- | ------------------------------------------------------------------------------- |
-| `text`     | none                         | everything — runs detectors on the raw input.                                   |
-| `markdown` | goldmark (CommonMark)        | paragraphs, headings, list-item text.                                           |
-| `html`     | `golang.org/x/net/html`      | element text. Tags, attributes, `<script>`/`<style>`/`<pre>`/`<code>` masked.   |
-| `jsx`      | tree-sitter-javascript       | comments, string literals, template quasis, JSX text.                           |
-| `tsx`      | tree-sitter-typescript (tsx) | same as jsx, plus TypeScript syntax-aware.                                      |
-| `ts`       | tree-sitter-typescript       | comments, string literals, template quasis. `<Foo>` treated as a type assertion.|
-| `js`       | tree-sitter-javascript       | comments, string literals, template quasis. No JSX.                             |
-| `auto`     | picked from file extension   | falls back to `text` for stdin or unknown extensions.                           |
+## How it works
 
-Auto-detection table:
+`check` runs 35 instant client-side detectors (regex + structural, no external calls), then optionally Claude-backed passes: a sentence tier (Haiku, 10 rules) under `--llm` and a document tier (Sonnet, 3 rules) under `--llm-deep` — 48 rules total. `--llm-effort` (`off｜low｜high｜auto`) is the underlying control; `--llm`/`--llm-deep` are sugar for `low`/`high`. Under a plugin (`$CLAUDE_PLUGIN_ROOT` or `$CURSOR_PLUGIN_ROOT` set) with `claude` reachable, `auto` resolves to `high`; the resolved effort and per-tier outcomes are reported in the JSON, and an unreachable `claude` degrades gracefully (the failure lands in an `error` field while client-side results still return).
 
-| Extensions                          | Mode       |
-| ----------------------------------- | ---------- |
-| `.md`, `.markdown`, `.mdx`          | `markdown` |
-| `.html`, `.htm`                     | `html`     |
-| `.jsx`                              | `jsx`      |
-| `.tsx`                              | `tsx`      |
-| `.ts`, `.mts`, `.cts`               | `ts`       |
-| `.js`, `.mjs`, `.cjs`               | `js`       |
-
-Three properties hold for every language mode:
-
-- **Byte offsets stay honest.** Violations still carry `startIndex` /
-  `endIndex` into the original input, and `matchedText` is re-sliced from
-  the original bytes. Consumers don't see the masking at all; they see an
-  accurate, cleaner report.
-- **Length + newlines preserved.** The masked copy has the same length as
-  the input and every `\n` sits at the same offset, so line-based tooling
-  downstream stays correct.
-- **Structural suppressions.** Each mode drops the rule/kind combinations
-  that are structural false positives. `dramatic-fragment` on
-  ATX/setext/HTML headings; `staccato-burst` across two or more consecutive
-  `<li>` / list items; `dramatic-fragment` inside JSDoc `@param` / `@returns`
-  runs.
-
-Pass `--lang=text` on any file to bypass masking entirely.
-
-### `rewrite`
-
-Runs the `rewriteParagraph` flow from the original source: builds a system
-prompt from the default rewrite directives (plus any rule IDs you pass) and
-asks Claude to rewrite the input.
-
-```bash
-slop-cop rewrite draft.txt --rules filler-adverbs,hedge-stack --pretty
-```
-
-Output:
-
-```json
-{
-  "rewritten": "…",
-  "applied_rules": ["filler-adverbs", "hedge-stack"]
-}
-```
-
-### `rules`
-
-Dumps rule metadata so agents don't have to hard-code it.
-
-```bash
-slop-cop rules --llm-only --pretty
-slop-cop rules --category word-choice
-```
-
-## Violation shape
-
-```ts
-type Violation = {
-  ruleId: string            // stable rule identifier (see `slop-cop rules`)
-  startIndex: number        // byte offset into the UTF-8 input, inclusive
-  endIndex: number          // byte offset, exclusive
-  matchedText: string       // text[startIndex:endIndex]
-  explanation?: string      // optional extra context (LLM passes, and a few
-                            //   client-side detectors like hedge-stack set this)
-  suggestedChange?: string  // LLM-supplied replacement, "" to suggest deletion
-}
-```
-
-**Byte offsets.** Offsets are bytes into the UTF-8 input, not UTF-16 code
-units as in the original JavaScript. Go's `regexp` and `strings` packages
-work in bytes by default, so consumers doing `text[v.StartIndex:v.EndIndex]`
-in Go (or any language that indexes strings by bytes) will get the right
-substring. If you're slicing the original string in a language that indexes
-by code units (JavaScript, Java), account for the difference around
-non-ASCII characters.
-
-## Detection tiers
-
-**Client-side (instant).** 35 regex + structural detectors. No external
-calls. These run unconditionally on `check`.
-
-**`--llm` (sentence-tier).** Shells out to `claude -p --output-format json
---json-schema ...` with Claude Haiku. Large inputs are chunked at paragraph
-boundaries (4000-char threshold, 3500-char target) and analysed in parallel,
-then merged and deduplicated by `ruleId + matchedText`. 10 rules:
-`triple-construction`, `throat-clearing`, `sycophantic-frame`,
-`balanced-take`, `unnecessary-elaboration`, `empathy-performance`,
-`pivot-paragraph`, `grandiose-stakes`, `historical-analogy`,
-`false-vulnerability`.
-
-**`high` effort (document-tier).** Shells out to Claude Sonnet. 3 rules:
-`dead-metaphor`, `one-point-dilution`, `fractal-summaries`. Always runs in
-addition to the sentence tier (i.e. `high` = sentence + document, not
-document alone).
-
-### LLM effort levels
-
-`--llm-effort` chooses how much LLM analysis to run:
-
-| Level  | Passes                         | Typical cost per check            |
-| ------ | ------------------------------ | --------------------------------- |
-| `off`  | none — client-side only        | free                              |
-| `low`  | sentence (Haiku)               | low                               |
-| `high` | sentence + document (Sonnet)   | higher (Sonnet dominates)         |
-| `auto` | `high` under plugin, `off` otherwise | 0 or higher depending on context |
-
-Two sugar aliases are kept for convenience:
-
-- `--llm`       ≡ `--llm-effort=low`
-- `--llm-deep`  ≡ `--llm-effort=high`
-
-If you mix them, `--llm-effort` (when explicitly set) wins; otherwise
-`--llm-deep` wins over `--llm`.
-
-### Auto-default under a plugin
-
-When `slop-cop check` detects it is running inside a Claude Code or Cursor
-plugin (either `$CLAUDE_PLUGIN_ROOT` or `$CURSOR_PLUGIN_ROOT` is set) and
-the `claude` CLI is reachable on `$PATH`, `--llm-effort=auto` resolves to
-`high` and both passes run. The resolved effort is always reported in the
-JSON (`"llm_effort": "high"` etc.); the `llm` field reports per-tier
-outcomes:
-
-```json
-"llm_effort": "high",
-"llm": {
-  "sentence": { "auto": true, "ran": true },
-  "document": { "auto": true, "ran": false, "error": "claude: exit status 1: …" }
-}
-```
-
-Auto-enabled passes degrade gracefully: if `claude` isn't reachable or
-returns an error (missing auth, rate limit, timeout), the failure is
-captured in the `error` field and the client-side detectors still return
-their results. An explicit `--llm-effort=low` / `high` still propagates
-errors as exit code 3. Pass `--llm-effort=off` (or `--llm=false`,
-`--llm-deep=false`) to force the passes off under a plugin.
-
-## Rules
-
-48 total: 35 client-side, 10 sentence-tier (LLM), 3 document-tier (LLM). See
-the [upstream README](https://github.com/awnist/slop-cop#patterns-detected)
-for the full pattern list, or run `slop-cop rules --pretty` locally.
-
-## Differences from the upstream
-
-- Go CLI + plugin/skill for coding agents instead of a browser UI; no
-  editor, no URL hash sync, no contenteditable.
-- LLM calls go through the `claude` CLI (subscription auth) instead of
-  direct Anthropic API requests.
-- Offsets are UTF-8 byte indices, not JavaScript UTF-16 units.
-- `detectNegationPivot` reimplements the two-sentence backreference case
-  by hand because Go's `regexp` (RE2) has no `\2`.
-
-All other detection logic is a 1:1 port; the 201 subtests in
-[`internal/detectors/word_patterns_test.go`](internal/detectors/word_patterns_test.go)
-mirror the original Vitest suite.
-
-## Repo layout
-
-```
-.claude-plugin/          Claude Code plugin + marketplace manifests
-.cursor-plugin/          Cursor plugin manifest
-skills/slop-cop-prose/   The prose-writing skill agents activate
-commands/                /slop-cop-check slash command
-scripts/
-  install-binary.sh      First-run binary bootstrap for the plugin (bash)
-  install-binary.ps1     Same, for Windows (PowerShell)
-  test-plugin.sh         Local end-to-end plugin test via `claude -p`
-cmd/slop-cop/            CLI entry point
-internal/                Detectors, rules, types, LLM subprocess wrapper
-```
-
-## Release model
-
-`main` is the release. Every push to `main` triggers
-[release.yml](.github/workflows/release.yml), which cross-compiles for
-linux/darwin/windows/freebsd × amd64/arm64 and publishes an immutable
-`v0.1.<run_number>` GitHub Release. `<run_number>` is GitHub Actions'
-monotonic workflow counter, so versions climb 0.1.7, 0.1.8, 0.1.9, …
-automatically. GitHub marks the newest release as "Latest".
-
-Stable install URL (no pinning required):
-
-```
-https://github.com/yasyf/slop-cop/releases/latest/download/slop-cop_<os>_<arch>.tar.gz
-```
-
-To pin to a specific build, use the tag directly:
-
-```bash
-go install github.com/yasyf/slop-cop/cmd/slop-cop@v0.1.7
-```
-
-or the versioned asset URL:
-
-```
-https://github.com/yasyf/slop-cop/releases/download/v0.1.7/slop-cop_<os>_<arch>.tar.gz
-```
-
-`slop-cop version` reports the matching `0.1.<n>` string baked in at build time.
+`--lang` parses code and masks every non-prose byte before detectors run, so you get hits on prose only — JSDoc, string literals, JSX text, HTML copy, markdown. Masking preserves length and newline offsets, so byte offsets in violations index the original UTF-8 input (bytes, not UTF-16 code units — account for that when slicing in JavaScript or Java). See [`skills/slop-cop-prose/SKILL.md`](skills/slop-cop-prose/SKILL.md) for the exact agent instructions.
 
 ## Development
 
-The repo pins Go 1.26.2 via `.tool-versions`. With
-[asdf](https://asdf-vm.com) installed, run `asdf install` in the repo root
-to pick it up; otherwise install Go 1.26 manually.
+The repo pins Go 1.26.2 via `.tool-versions` (run `asdf install`, or install Go 1.26 manually).
 
 ```bash
 go test ./...
@@ -390,25 +82,12 @@ go vet ./...
 go build ./...
 ```
 
+`main` is the release: every push triggers [release.yml](.github/workflows/release.yml), which cross-compiles and publishes an immutable `v0.1.<run_number>` GitHub Release marked Latest.
+
 ## License & credit
 
-The Go source in this repository (the CLI, plugin manifests, skill
-authoring, subprocess plumbing, build system, documentation, tests) is
-released under the [MIT License](LICENSE).
+The Go source in this repository is released under the [MIT License](LICENSE).
 
-The pattern taxonomy, rule catalogue, detector algorithms, word lists, and
-LLM prompts are derived from
-[awnist/slop-cop](https://github.com/awnist/slop-cop) by
-[@awnist](https://github.com/awnist). At the time this port was made, that
-upstream repository carried no open-source licence; see [NOTICE](NOTICE) for
-the full provenance, attribution, and compliance guidance. If you plan to
-use this tool beyond personal use or contributions back to the upstream
-author, please reach out to @awnist to clarify licensing of the derived
-content.
+The pattern taxonomy, rule catalogue, detector algorithms, word lists, and LLM prompts are derived from [awnist/slop-cop](https://github.com/awnist/slop-cop) by [@awnist](https://github.com/awnist), which carried no open-source licence at port time; see [NOTICE](NOTICE) for provenance and compliance guidance. If you plan to use this beyond personal use, reach out to @awnist to clarify licensing of the derived content.
 
-Original source rules:
-[LLM_PROSE_TELLS.md](https://git.eeqj.de/sneak/prompts/src/branch/main/prompts/LLM_PROSE_TELLS.md)
-(MIT, © sneak),
-[Wikipedia: Signs of AI Writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing)
-(CC BY-SA 4.0),
-[tropes.md](https://tropes.fyi/tropes-md).
+Original source rules: [LLM_PROSE_TELLS.md](https://git.eeqj.de/sneak/prompts/src/branch/main/prompts/LLM_PROSE_TELLS.md) (MIT, © sneak), [Wikipedia: Signs of AI Writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing) (CC BY-SA 4.0), [tropes.md](https://tropes.fyi/tropes-md).
