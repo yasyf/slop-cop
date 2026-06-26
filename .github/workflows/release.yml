@@ -1,13 +1,9 @@
 name: Release
 
-# Version scheme is 0.1.${{ github.run_number }} — github.run_number is
-# GitHub Actions' monotonic per-workflow counter. It is stable across pushes
-# as long as this workflow file keeps its path (.github/workflows/release.yml);
-# renaming/replacing the file would reset the counter.
-#
-# Every push to main auto-releases: a step creates+pushes the tag
-# v0.1.<run_number>, then goreleaser builds all targets and publishes the
-# GitHub Release plus the Homebrew cask in yasyf/homebrew-tap.
+# Every push to main auto-releases: release-go.yml@v1 tags v0.1.<run_number>, then
+# goreleaser builds (cgo tree-sitter; zig cross-compiles linux/windows), codesigns the
+# darwin binaries, and publishes the cask. github.run_number stays monotonic as long as
+# this workflow file keeps its path (.github/workflows/release.yml).
 
 on:
   push:
@@ -23,65 +19,10 @@ concurrency:
 
 jobs:
   release:
-    name: release
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      # zig provides the cross C toolchain for the cgo linux/windows targets;
-      # darwin builds with the runner's native clang.
-      - name: Setup zig
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.16.0
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Tag
-        run: |
-          TAG="v0.1.${{ github.run_number }}"
-          git tag "$TAG"
-          git push origin "$TAG"
-          echo "GORELEASER_CURRENT_TAG=$TAG" >> "$GITHUB_ENV"
-
-      # Import the Developer ID cert into a throwaway keychain and resolve the signing
-      # identity + notary key for scripts/macos-codesign.sh (run from goreleaser's build hook).
-      - name: Import Developer ID certificate
-        env:
-          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
-          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
-          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
-        run: |
-          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
-          KP="$(openssl rand -base64 24)"
-          security create-keychain -p "$KP" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$KP" "$KEYCHAIN"
-          echo -n "$MACOS_SIGN_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_SIGN_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KP" "$KEYCHAIN" >/dev/null
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/[\" ]//g')
-          rm -f "$RUNNER_TEMP/cert.p12"
-          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/Developer ID Application/{print $2; exit}')"
-          echo "MACOS_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-          echo -n "$MACOS_NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          echo "MACOS_NOTARY_KEY_FILE=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
-
-      - name: Release
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          # Developer ID signing + notarization (read by scripts/macos-codesign.sh).
-          MACOS_SIGN_IDENTITY: ${{ env.MACOS_SIGN_IDENTITY }}
-          MACOS_NOTARY_KEY_FILE: ${{ env.MACOS_NOTARY_KEY_FILE }}
-          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-          MACOS_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+    uses: yasyf/homebrew-tap/.github/workflows/release-go.yml@v1
+    secrets: inherit
+    with:
+      runner: macos-latest
+      signer: codesign
+      setup-zig: "0.16.0"
+      auto-tag: true

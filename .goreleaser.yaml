@@ -57,10 +57,12 @@ builds:
       # darwin amd64/arm64 fall through to the build-level env (CGO_ENABLED=1,
       # native clang) with no CC override.
     # Developer ID sign + notarize the darwin binaries via codesign + notarytool
-    # (quill SIGKILLs on arm64 — anchore/quill#566). No-op without the MACOS_* env.
+    # (quill SIGKILLs on arm64 — anchore/quill#566), using the shared script the
+    # import-developer-id action drops on the runner ($MACOS_CODESIGN_SCRIPT). Guarded
+    # so a local `goreleaser release --snapshot` (no signing env) is a clean no-op.
     hooks:
       post:
-        - cmd: bash scripts/macos-codesign.sh "{{ .Path }}" "{{ .Target }}"
+        - cmd: sh -c 'if [ -n "${MACOS_CODESIGN_SCRIPT:-}" ]; then bash "$MACOS_CODESIGN_SCRIPT" "$1" "$2"; fi' -- "{{ .Path }}" "{{ .Target }}"
           output: true
 
 archives:
