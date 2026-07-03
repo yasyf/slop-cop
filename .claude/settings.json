@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uvx capt-hook run PermissionRequest"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "hooks": [
