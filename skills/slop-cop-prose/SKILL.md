@@ -15,6 +15,9 @@ stacks, metaphor crutches, and so on), and revise.
 This is a **self-review** loop: the draft is yours, the review tool is also
 yours, and the user sees only the revised result.
 
+Writing always runs on fable: never delegate the draft or the revision to a
+down-routed subagent — inherit the session model or pass `model: fable`.
+
 ## When to run
 
 Run this skill whenever the user asks to:
