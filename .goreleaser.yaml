@@ -73,12 +73,21 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+  # Bare per-arch binaries for the plugin's install-binary.sh; the cask keeps
+  # consuming the tar.gz/zip archives above. Both land in checksums.txt.
+  - id: binary
+    ids: [slop-cop]
+    formats: [binary]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt
 
 homebrew_casks:
   - name: slop-cop
+    # Pin the cask to the tar.gz/zip archives it has always consumed; without
+    # this, the bare-binary archive above makes the cask pipe ambiguous.
+    ids: [slop-cop]
     binaries:
       - slop-cop
     repository:
