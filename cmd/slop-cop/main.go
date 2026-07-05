@@ -51,9 +51,11 @@ func main() {
 }
 
 func newRoot() *cobra.Command {
+	ver, _ := buildMetadata()
 	root := &cobra.Command{
-		Use:   "slop-cop",
-		Short: "Detect LLM-generated prose patterns; emit structured JSON.",
+		Use:     "slop-cop",
+		Short:   "Detect LLM-generated prose patterns; emit structured JSON.",
+		Version: ver,
 		Long: `slop-cop runs regex + structural detectors (and optional Claude-backed
 semantic analysis) over a piece of text, and prints a JSON report aimed at
 other agents.
@@ -67,6 +69,9 @@ Exit codes:
   3  claude subprocess error
   4  flag/usage error`,
 	}
+	// --version prints the bare stamped version, one line, no decoration:
+	// the plugin installer compares it against the release tag.
+	root.SetVersionTemplate("{{.Version}}\n")
 	root.AddCommand(newCheckCmd())
 	root.AddCommand(newRewriteCmd())
 	root.AddCommand(newRulesCmd())
