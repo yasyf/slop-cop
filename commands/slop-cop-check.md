@@ -18,8 +18,8 @@ Run `slop-cop check` over the target prose and summarise the findings. Does
 ## Instructions
 
 1. **Resolve the binary.** Prefer
-   `${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}/bin/slop-cop`. If it is
-   not present, run the bootstrap once:
+   `${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}/bin/slop-cop` — a symlink
+   the installer maintains silently. If it is not present, provision it:
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT}}/scripts/install-binary.sh"
    ```
