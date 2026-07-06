@@ -94,7 +94,7 @@ The [`slop-cop-prose`](skills/slop-cop-prose/SKILL.md) skill triggers whenever y
 <details>
 <summary>Claude Code</summary>
 
-Install with the two `/plugin` commands under [Get started](#get-started). On the first draft, the skill runs [`scripts/install-binary.sh`](scripts/install-binary.sh), which keeps `bin/slop-cop` as a symlink to the newest [release](https://github.com/yasyf/slop-cop/releases/latest) — a brew-installed binary when you have one, otherwise a checksum-verified download into the plugin data dir; no Go toolchain required. On Windows, [`scripts/install-binary.ps1`](scripts/install-binary.ps1) instead downloads the release zip straight into `bin\slop-cop.exe` (no symlink or checksum verification). Verify end-to-end with [`scripts/test-plugin.sh`](scripts/test-plugin.sh).
+Install with the two `/plugin` commands under [Get started](#get-started). On the first draft, the skill runs [`scripts/install-binary.sh`](scripts/install-binary.sh), which keeps `bin/slop-cop` as a symlink to the newest [release](https://github.com/yasyf/slop-cop/releases/latest) — a brew-installed binary when you have one, otherwise a checksum-verified download into the plugin data dir; no Go toolchain required. Verify end-to-end with [`scripts/test-plugin.sh`](scripts/test-plugin.sh).
 
 </details>
 

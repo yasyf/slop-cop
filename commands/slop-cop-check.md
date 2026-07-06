@@ -23,9 +23,7 @@ Run `slop-cop check` over the target prose and summarise the findings. Does
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT}}/scripts/install-binary.sh"
    ```
-   (on Windows, `install-binary.ps1` downloads `bin\slop-cop.exe` directly —
-   no symlink). Fall back to `slop-cop` on `$PATH` if neither plugin root is
-   set.
+   Fall back to `slop-cop` on `$PATH` if neither plugin root is set.
 
 2. **Pick the target.** In order of preference:
    - `$ARGUMENTS` if the user supplied a path or `-`.

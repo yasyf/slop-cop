@@ -7,8 +7,8 @@ before:
     - go mod download
 
 # slop-cop links tree-sitter (cgo), so every target must build with
-# CGO_ENABLED=1 and a C toolchain. linux/windows cross-compile via `zig cc`
-# (zig bundles a full cross C toolchain: static musl Linux, mingw Windows);
+# CGO_ENABLED=1 and a C toolchain. linux cross-compiles via `zig cc`
+# (zig bundles a full cross C toolchain: static musl Linux);
 # darwin builds natively on the macOS runner with clang because zig does not
 # ship the macOS SDK. FreeBSD is intentionally absent (go-tree-sitter has no
 # freebsd support).
@@ -20,7 +20,6 @@ builds:
       - CGO_ENABLED=1
     goos:
       - linux
-      - windows
       - darwin
     goarch:
       - amd64
@@ -42,18 +41,6 @@ builds:
           - CGO_ENABLED=1
           - "CC=zig cc -target aarch64-linux-musl"
           - "CXX=zig c++ -target aarch64-linux-musl"
-      - goos: windows
-        goarch: amd64
-        env:
-          - CGO_ENABLED=1
-          - "CC=zig cc -target x86_64-windows-gnu"
-          - "CXX=zig c++ -target x86_64-windows-gnu"
-      - goos: windows
-        goarch: arm64
-        env:
-          - CGO_ENABLED=1
-          - "CC=zig cc -target aarch64-windows-gnu"
-          - "CXX=zig c++ -target aarch64-windows-gnu"
       # darwin amd64/arm64 fall through to the build-level env (CGO_ENABLED=1,
       # native clang) with no CC override.
     # Developer ID sign + notarize the darwin binaries via codesign + notarytool
@@ -69,12 +56,9 @@ archives:
   - id: slop-cop
     ids: [slop-cop]
     formats: [tar.gz]
-    format_overrides:
-      - goos: windows
-        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
   # Bare per-arch binaries for the plugin's install-binary.sh; the cask keeps
-  # consuming the tar.gz/zip archives above. Both land in checksums.txt.
+  # consuming the tar.gz archives above. Both land in checksums.txt.
   - id: binary
     ids: [slop-cop]
     formats: [binary]
@@ -85,7 +69,7 @@ checksum:
 
 homebrew_casks:
   - name: slop-cop
-    # Pin the cask to the tar.gz/zip archives it has always consumed; without
+    # Pin the cask to the tar.gz archives it has always consumed; without
     # this, the bare-binary archive above makes the cask pipe ambiguous.
     ids: [slop-cop]
     binaries:

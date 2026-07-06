@@ -1,5 +1,5 @@
 #!/bin/sh
-# canonical: cc-skills/plugins/repo-bootstrap@7f143612aa5bb563f534aae36f6848d0ff6d2975
+# canonical: cc-skills/plugins/repo-bootstrap@ed090c97704f984ff2caed8f9f224816237fe468
 # Provision the slop-cop binary for the slop-cop plugin.
 #
 # bin/slop-cop is only ever a symlink — to a brew-installed binary, the

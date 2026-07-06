@@ -1,7 +1,7 @@
 name: Release
 
 # Every push to main auto-releases: release-go.yml@v1 tags v0.1.<run_number>, then
-# goreleaser builds (cgo tree-sitter; zig cross-compiles linux/windows), codesigns the
+# goreleaser builds (cgo tree-sitter; zig cross-compiles linux), codesigns the
 # darwin binaries, and publishes the cask. github.run_number stays monotonic as long as
 # this workflow file keeps its path (.github/workflows/release.yml).
 

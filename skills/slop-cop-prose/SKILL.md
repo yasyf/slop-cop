@@ -53,10 +53,6 @@ else
 fi
 ```
 
-On Windows run
-`pwsh "$env:CLAUDE_PLUGIN_ROOT\scripts\install-binary.ps1"` (or
-`powershell -File ...`) instead and point `SLOP_COP` at `bin\slop-cop.exe`.
-
 If *both* `CLAUDE_PLUGIN_ROOT` and `CURSOR_PLUGIN_ROOT` are unset (rare:
 running the skill outside both products), infer the plugin root from this
 SKILL.md's location: the plugin root is the directory two levels above this
