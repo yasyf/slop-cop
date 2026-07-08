@@ -1,4 +1,16 @@
 {
+  "enabledPlugins": {
+    "cc-context@skills": true
+  },
+  "extraKnownMarketplaces": {
+    "skills": {
+      "source": {
+        "source": "github",
+        "repo": "yasyf/cc-skills"
+      },
+      "autoUpdate": true
+    }
+  },
   "hooks": {
     "PermissionRequest": [
       {
