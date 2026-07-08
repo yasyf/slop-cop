@@ -1,6 +1,6 @@
 {
   "enabledPlugins": {
-    "cc-context@skills": true
+    "cc-context@cc-context": true
   },
   "extraKnownMarketplaces": {
     "skills": {
@@ -9,6 +9,12 @@
         "repo": "yasyf/cc-skills"
       },
       "autoUpdate": true
+    },
+    "cc-context": {
+      "source": {
+        "source": "github",
+        "repo": "yasyf/cc-context"
+      }
     }
   },
   "hooks": {
