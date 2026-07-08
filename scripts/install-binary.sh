@@ -1,5 +1,5 @@
 #!/bin/sh
-# canonical: cc-skills/plugins/repo-bootstrap@ed090c97704f984ff2caed8f9f224816237fe468
+# cc-guides 0.1.2 src=install-binary.src.sh | GENERATED — do not edit: change install-binary.src.sh and run 'cc-guides render'. Everything below is in force.
 # Provision the slop-cop binary for the slop-cop plugin.
 #
 # bin/slop-cop is only ever a symlink — to a brew-installed binary, the
