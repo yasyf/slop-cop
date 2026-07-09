@@ -1,5 +1,5 @@
 #!/bin/sh
-# cc-guides 0.1.7 src=install-binary.src.sh | GENERATED — do not edit: change install-binary.src.sh and run 'cc-guides render'. Everything below is in force.
+# cc-guides 0.1.8 src=install-binary.src.sh | GENERATED — do not edit: change install-binary.src.sh and run 'cc-guides render'. Everything below is in force.
 # Provision the slop-cop binary for the slop-cop plugin.
 #
 # bin/slop-cop is only ever a symlink — to a brew-installed binary, the
