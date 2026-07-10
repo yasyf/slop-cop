@@ -3,3 +3,6 @@ fragments = [
   "cc-skills:ccx",
   "learned-user-preferences",
 ]
+
+[sources.cc-skills]
+source = "github:yasyf/cc-skills@main"
