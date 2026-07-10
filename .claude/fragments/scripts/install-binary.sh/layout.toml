@@ -1,0 +1,3 @@
+fragments = [
+  { use = "cc-skills:install-binary-latest", args = { binary = "slop-cop", brew = "yasyf/tap/slop-cop", plugin = "slop-cop", repo = "yasyf/slop-cop" } },
+]

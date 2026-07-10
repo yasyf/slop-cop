@@ -1,7 +1,3 @@
-# AGENTS.md
-
-{{> ccx}}
-
 ## Learned User Preferences
 
 - Prefer automated per-push releases driven by GitHub Actions' built-ins over hand-bumped semver tags. Use `github.run_number` as the build number and let GitHub's `/releases/latest` endpoint track "current" — never hand-maintain a mutable `latest` tag.
