@@ -1,0 +1,8 @@
+fragments = [
+  "cc-skills:settings-base",
+  "cc-skills:settings-go",
+  "settings-overrides",
+]
+
+[sources.cc-skills]
+source = "github:yasyf/cc-skills@main"
