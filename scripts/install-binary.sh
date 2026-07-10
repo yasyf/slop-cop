@@ -1,5 +1,5 @@
 #!/bin/sh
-# cc-guides 0.1.11 src=.claude/fragments/scripts/install-binary.sh fragments=cc-skills@a91b043bdbd2 | GENERATED — do not edit: edit .claude/fragments/scripts/install-binary.sh/ and run 'cc-guides render'. Everything below is in force.
+# cc-guides 0.1.12 src=.claude/fragments/scripts/install-binary.sh fragments=cc-skills@1d12978b0605 | GENERATED — do not edit: edit .claude/fragments/scripts/install-binary.sh/ and run 'cc-guides render'. Everything below is in force.
 # Provision the slop-cop binary for the slop-cop plugin.
 #
 # bin/slop-cop is only ever a symlink — to a brew-installed binary, the
