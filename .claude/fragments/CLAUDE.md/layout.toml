@@ -1,0 +1,6 @@
+fragments = [
+  "cc-skills:claude-rules",
+]
+
+[sources.cc-skills]
+source = "github:yasyf/cc-skills@main"
