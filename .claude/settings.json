@@ -4,6 +4,7 @@
   "alwaysThinkingEnabled": true,
   "showThinkingSummaries": true,
   "includeGitInstructions": false,
+  "disableArtifact": true,
   "env": {
     "ENABLE_TOOL_SEARCH": "true",
     "ENABLE_LSP_TOOL": "1",
@@ -46,19 +47,22 @@
       "source": {
         "source": "github",
         "repo": "yasyf/cc-notes"
-      }
+      },
+      "autoUpdate": true
     },
     "cc-context": {
       "source": {
         "source": "github",
         "repo": "yasyf/cc-context"
-      }
+      },
+      "autoUpdate": true
     },
     "captain-hook": {
       "source": {
         "source": "github",
         "repo": "yasyf/captain-hook"
-      }
+      },
+      "autoUpdate": true
     }
   },
   "enabledPlugins": {
