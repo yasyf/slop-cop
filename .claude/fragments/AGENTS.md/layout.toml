@@ -1,5 +1,9 @@
 fragments = [
   "agents-md",
+  "cc-skills:ask-before-assuming",
+  "cc-skills:code-review-response",
+  "cc-skills:parallelize",
+  "cc-skills:writing-plans",
   "cc-skills:ccx",
   "learned-user-preferences",
 ]
