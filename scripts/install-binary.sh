@@ -27,7 +27,7 @@ DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/slop-cop}"
 
 # Latest mode: resolve the newest release tag off the releases/latest redirect.
 # Unresolvable (offline) with a working binary in place -> keep what we have.
-effective="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" || true)"
+effective="$(curl -fsSLI --connect-timeout 10 --max-time 30 -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" || true)"
 TAG="${effective##*/tag/}"
 case "$TAG" in
   v[0-9]*) ;;
@@ -167,9 +167,9 @@ mkdir -p "$DATA_DIR/bin"
 # still-executing inode alive.
 tmp="$(mktemp "$DATA_DIR/bin/.$NAME.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
-curl -fsSL --retry 2 -o "$tmp" "$url"
+curl -fsSL --retry 2 --connect-timeout 10 --max-time 300 -o "$tmp" "$url"
 
-if ! sums="$(curl -fsSL --retry 2 "https://github.com/$REPO/releases/download/$TAG/checksums.txt")"; then
+if ! sums="$(curl -fsSL --retry 2 --connect-timeout 10 --max-time 60 "https://github.com/$REPO/releases/download/$TAG/checksums.txt")"; then
   echo "$NAME: could not fetch checksums.txt for $TAG" >&2
   exit 1
 fi
