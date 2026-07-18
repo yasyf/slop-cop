@@ -30,7 +30,7 @@ Editing the plan first robs the user of the choice and forces them to diff the p
 
 ## Parallelize Independent Work
 
-Sequential is the exception, not the default. Two steps that don't consume each other's output run at the same time; when unsure whether they're independent, assume they are and fan out. The orchestrator routes and synthesizes — it never executes work a subagent could, including sustained browser automation, QA sweeps, and data extraction. Pick the surface by scale:
+Sequential is the exception, not the default. Two steps that don't consume each other's output run at the same time; when unsure whether they're independent, assume they are and fan out. Even verdict-gated work overlaps: a candidate fix ships only after verification, but it can be built — worktree-isolated — while verification runs (CLAUDE.md § Plan Execution & Orchestration, Speculate while you verify). The orchestrator routes and synthesizes — it never executes work a subagent could, including sustained browser automation, QA sweeps, and data extraction. Pick the surface by scale:
 
 - **Batch tool calls in one message** — the cheapest parallelism and the most missed. Independent reads, greps, globs, and read-only Bash go in a *single* message, never one per turn.
 - **Parallel subagent calls in one message** — ad-hoc independent investigations: "explore X while I check Y", multi-file reviews, independent edits. One message, N `Agent` tool uses, results gathered in parallel.
