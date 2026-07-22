@@ -1,0 +1,22 @@
+name: Autobump
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 10 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        type: boolean
+        default: false
+      strict:
+        type: boolean
+        default: false
+permissions:
+  contents: write
+jobs:
+  autobump:
+    uses: yasyf/cc-skills/.github/workflows/plugin-autobump.yml@plugin-v1
+    with:
+      dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+      strict: ${{ github.event_name == 'workflow_dispatch' && inputs.strict || false }}
