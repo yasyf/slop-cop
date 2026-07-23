@@ -1,6 +1,6 @@
 name: Release
 
-# Every push to main auto-releases: release-go.yml@v1 tags v0.1.<run_number>, then
+# Every push to main auto-releases: release-go.yml tags v0.1.<run_number>, then
 # goreleaser builds (cgo tree-sitter; zig cross-compiles linux), codesigns the
 # darwin binaries, and publishes the cask. github.run_number stays monotonic as long as
 # this workflow file keeps its path (.github/workflows/release.yml).
@@ -32,7 +32,7 @@ jobs:
 
   release:
     needs: test
-    uses: yasyf/homebrew-tap/.github/workflows/release-go.yml@v1
+    uses: yasyf/homebrew-tap/.github/workflows/release-go.yml@3bfe1af3bdc10ec783e79050e7c647152a537801
     secrets: inherit
     with:
       runner: macos-latest
