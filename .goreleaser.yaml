@@ -45,11 +45,11 @@ builds:
       # native clang) with no CC override.
     # Developer ID sign + notarize the darwin binaries via codesign + notarytool
     # (quill SIGKILLs on arm64 — anchore/quill#566), using the shared script the
-    # import-developer-id action drops on the runner ($MACOS_CODESIGN_SCRIPT). Guarded
-    # so a local `goreleaser release --snapshot` (no signing env) is a clean no-op.
+    # import-developer-id action drops on the runner ($MACOS_CODESIGN_SCRIPT).
+    # Local release configuration validation uses `goreleaser check`.
     hooks:
       post:
-        - cmd: sh -c 'if [ -n "${MACOS_CODESIGN_SCRIPT:-}" ]; then bash "$MACOS_CODESIGN_SCRIPT" "$1" "$2"; fi' -- "{{ .Path }}" "{{ .Target }}"
+        - cmd: bash "{{ .Env.MACOS_CODESIGN_SCRIPT }}" "{{ .Path }}" "{{ .Target }}"
           output: true
 
 archives:
@@ -80,13 +80,6 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/yasyf/slop-cop
     description: Detect the rhetorical and structural tells of LLM-generated prose and emit a structured JSON report.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr",
-                           args: ["-dr", "com.apple.quarantine", "#{staged_path}/slop-cop"]
-          end
 
 release:
   prerelease: auto

@@ -18,7 +18,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          check-latest: true
+      - name: go test
+        run: go test -race ./...
+
   release:
+    needs: test
     uses: yasyf/homebrew-tap/.github/workflows/release-go.yml@v1
     secrets: inherit
     with:
