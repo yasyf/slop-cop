@@ -32,7 +32,7 @@ jobs:
 
   release:
     needs: test
-    uses: yasyf/homebrew-tap/.github/workflows/release-go.yml@4afbb78f9e1814af04f9686ccf101ecafd5aa295
+    uses: yasyf/homebrew-tap/.github/workflows/release-go.yml@52b26a1684d94ae2669d124f844148deaa4f5baf
     secrets: inherit
     with:
       runner: macos-latest
