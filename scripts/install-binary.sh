@@ -14,6 +14,12 @@
 #   4. brew present, binary absent                    -> brew install, symlink
 #   5. durable data-dir payload at target             -> re-symlink, no re-download
 #   6. static download into the data dir              -> sha256-verify, symlink
+#
+# Consumer extension point: a sibling scripts/install-binary.extras.sh, when
+# present, is sourced before the detach guard and any arm runs —
+# plugin-specific migrations go there, and redefining extras_on_exit() adds
+# work to the EXIT trap. Ships from the consumer's own fragments; most plugins
+# have none.
 set -eu
 
 NAME="slop-cop"
@@ -24,6 +30,86 @@ LINK="$ROOT/bin/$NAME"
 # CLAUDE_PLUGIN_DATA is only exported to hook/MCP subprocesses; bare shell runs
 # fall back to its documented default.
 DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/plugins/data/slop-cop}"
+BREW_LOCK="$DATA_DIR/brew.lock"
+BREW_LOCK_MAX_AGE=600
+BREW_LOCK_TOKEN="$$.$(date +%s)"
+BREW_LOCK_HELD=0
+
+# Rename-atomic: bare ln -sf unlinks then re-creates, and a concurrent caller
+# exec'ing $LINK in that window sees ENOENT — fatal on the MCP path now that
+# detached refreshes relink while callers run.
+relink() {
+  ln -sf "$1" "$LINK.$$"
+  mv -f "$LINK.$$" "$LINK"
+}
+
+release_brew_lock() {
+  [ "$BREW_LOCK_HELD" -eq 1 ] || return 0
+  BREW_LOCK_HELD=0
+  # Best-effort: a mismatched token means we were stale-broken and re-acquired
+  # — leave it. The read-then-rm window can still delete a lock acquired in
+  # between; that degrades to the pre-lock behavior.
+  [ "$(cat "$BREW_LOCK/owner" 2>/dev/null)" = "$BREW_LOCK_TOKEN" ] || return 0
+  rm -rf "$BREW_LOCK" 2>/dev/null || true
+}
+
+brew_lock_mtime() {
+  case "$(uname -s)" in
+    Darwin) stat -f %m "$BREW_LOCK" ;;
+    *) stat -c %Y "$BREW_LOCK" ;;
+  esac
+}
+
+# Fresh sessions fully serialize on the mkdir; after a crashed holder,
+# stale-break/release are best-effort — rare races briefly admit
+# concurrent brews, bounded by Homebrew's own locks.
+break_stale_brew_lock() {
+  # Asides are garbage from birth (they exist only between a breaker's mv
+  # and rm, and mv inherits the old lock's mtime); reap on sight — a
+  # concurrent double-reap is guarded.
+  find "$DATA_DIR" -maxdepth 1 -name 'brew.lock.stale.*' \
+    -exec rm -rf {} + 2>/dev/null || true
+  [ -d "$BREW_LOCK" ] || return 0
+  lock_mtime="$(brew_lock_mtime 2>/dev/null)" || return 0
+  lock_now="$(date +%s)"
+  [ "$((lock_now - lock_mtime))" -gt "$BREW_LOCK_MAX_AGE" ] || return 0
+  # mv-aside: a lost race is ENOENT + re-mkdir; exclusivity is best-effort (above).
+  mv "$BREW_LOCK" "$BREW_LOCK.stale.$$" 2>/dev/null || return 0
+  rm -rf "$BREW_LOCK.stale.$$" 2>/dev/null || true
+}
+
+# probe: 2 stale arm-3 runs, brew asleep -> one upgrade, both exit 0.
+# probe: lock backdated >600s -> mv'd aside; EXIT clears the new one.
+# probe: foreign owner token -> release leaves the lock.
+acquire_brew_lock() {
+  mkdir -p "$DATA_DIR" || return 1
+  break_stale_brew_lock
+  mkdir "$BREW_LOCK" 2>/dev/null || return 1
+  printf '%s\n' "$BREW_LOCK_TOKEN" >"$BREW_LOCK/owner" 2>/dev/null || {
+    rm -rf "$BREW_LOCK" 2>/dev/null || true
+    return 1
+  }
+  BREW_LOCK_HELD=1
+}
+
+extras_on_exit() { :; }
+if [ -f "$ROOT/scripts/install-binary.extras.sh" ]; then
+  . "$ROOT/scripts/install-binary.extras.sh"
+fi
+trap 'release_brew_lock; extras_on_exit' EXIT
+
+# A working binary never blocks its caller: hooks and MCP entrypoints run this
+# script on their critical path, and everything from the tag resolve down can
+# hit the network — a slow round-trip there kills MCP registration outright
+# (the client's 30s connect timeout, never retried). Detach the whole
+# resolve+refresh with all three stdio fds off the caller's pipes and keep
+# serving the installed binary; the relink lands for a later launch. A broken
+# binary still resolves foreground; --sync (the detached child itself, or a
+# caller that must block) forces the foreground path.
+if [ "${1:-}" != "--sync" ] && [ -x "$LINK" ] && [ -n "$("$LINK" --version 2>/dev/null | head -n 1)" ]; then
+  sh "$0" --sync </dev/null >/dev/null 2>&1 &
+  exit 0
+fi
 
 # Latest mode: resolve the newest release tag off the releases/latest redirect.
 # Unresolvable (offline) with a working binary in place -> keep what we have.
@@ -82,6 +168,20 @@ probe() {
   ) || true
 }
 
+sync_brew() {
+  found="$(probe)"
+  if [ -n "$found" ]; then
+    case "$("$found" --version 2>/dev/null | head -n 1)" in
+      "$TAG" | "$BARE" | v[0-9]*[!0-9.]* | [0-9]*[!0-9.]*) ;;
+      *) brew upgrade "$BREW_PKG" >/dev/null 2>&1 || true ;;
+    esac
+    found="$(probe)"
+    return 0
+  fi
+  brew install "$BREW_PKG" >/dev/null 2>&1 || true
+  found="$(probe)"
+}
+
 found="$(probe)"
 # Belt for the exclusion above: a probe result that is bin/$NAME's own
 # directory entry under any path spelling must never be self-symlinked. The
@@ -93,21 +193,45 @@ fi
 if [ -n "$found" ]; then
   case "$("$found" --version 2>/dev/null | head -n 1)" in
     "$TAG" | "$BARE" | v[0-9]*[!0-9.]* | [0-9]*[!0-9.]*) ;;
-    *) brew upgrade "$BREW_PKG" >/dev/null 2>&1 || true ;;
+    *)
+      if acquire_brew_lock; then
+        sync_brew
+        release_brew_lock
+      fi
+      ;;
   esac
-  ln -sf "$found" "$LINK"
-  exit 0
+  if [ -n "$found" ]; then
+    relink "$found"
+    exit 0
+  fi
 fi
 
 # Arm 4: brew present, binary absent. Best-effort — any failure (Homebrew
 # tap-trust sandbox bug #22603, network) falls through to the direct download.
 if command -v brew >/dev/null 2>&1; then
-  if brew install "$BREW_PKG" >/dev/null 2>&1; then
-    found="$(probe)"
-    if [ -n "$found" ]; then
-      ln -sf "$found" "$LINK"
-      exit 0
+  # Lock wait: 6 acquire attempts, 5 sleeps of 2s between them (~10s nominal).
+  brew_lock_acquired=0
+  brew_lock_attempt=0
+  while [ "$brew_lock_attempt" -lt 6 ]; do
+    if acquire_brew_lock; then
+      brew_lock_acquired=1
+      break
     fi
+    brew_lock_attempt=$((brew_lock_attempt + 1))
+    [ "$brew_lock_attempt" -lt 6 ] || break
+    sleep 2
+  done
+  if [ "$brew_lock_acquired" -eq 1 ]; then
+    sync_brew
+    release_brew_lock
+  else
+    # Lock wait lost: fall through — contended fresh installs may race the
+    # download arms, which are concurrent-but-atomic (mktemp + mv).
+    found="$(probe)"
+  fi
+  if [ -n "$found" ]; then
+    relink "$found"
+    exit 0
   fi
   echo "$NAME: Homebrew unavailable or failed (e.g. tap-trust #22603); using direct download" >&2
 fi
@@ -154,7 +278,7 @@ dest="$DATA_DIR/bin/$NAME"
 if [ -x "$dest" ]; then
   case "$("$dest" --version 2>/dev/null | head -n 1)" in
     "$TAG" | "$BARE")
-      ln -sf "$dest" "$LINK"
+      relink "$dest"
       exit 0
       ;;
   esac
@@ -166,7 +290,7 @@ mkdir -p "$DATA_DIR/bin"
 # running executable fails with ETXTBSY on Linux, and the rename keeps any
 # still-executing inode alive.
 tmp="$(mktemp "$DATA_DIR/bin/.$NAME.XXXXXX")"
-trap 'rm -f "$tmp"' EXIT
+trap 'rm -f "$tmp"; release_brew_lock; extras_on_exit' EXIT
 curl -fsSL --retry 2 --connect-timeout 10 --max-time 300 -o "$tmp" "$url"
 
 if ! sums="$(curl -fsSL --retry 2 --connect-timeout 10 --max-time 60 "https://github.com/$REPO/releases/download/$TAG/checksums.txt")"; then
@@ -186,5 +310,5 @@ fi
 
 chmod +x "$tmp"
 mv -f "$tmp" "$dest"
-ln -sf "$dest" "$LINK"
+relink "$dest"
 echo "$NAME: installed $dest ($("$dest" --version))" >&2
