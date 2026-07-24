@@ -35,6 +35,21 @@ jobs:
       - name: go build
         run: go build ./...
 
+  # The plugin marketplace serves .claude-plugin/plugin.json; hooks resolve the
+  # version-exact binary through bin/slop-cop.binrun. They must pin the same
+  # version — the release descriptor job moves them together, and this gate
+  # catches any drift (a stale autobump, a hand edit) before it merges.
+  agreement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert plugin manifest and binrun descriptor agree on version
+        run: |
+          manifest="$(jq -r .version .claude-plugin/plugin.json)"
+          descriptor="$(tail -n +2 bin/slop-cop.binrun | jq -r .version.static)"
+          test "$manifest" = "$descriptor" \
+            || { echo "version drift: plugin.json=$manifest descriptor=$descriptor" >&2; exit 1; }
+
   lint:
     runs-on: ubuntu-latest
     steps:

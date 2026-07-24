@@ -34,17 +34,16 @@ Do **not** run it on:
 
 ## Resolving the binary
 
-`bin/slop-cop` under the plugin root is a symlink that
-`scripts/install-binary.sh` maintains silently — pointing at a
-brew-installed binary, a durable download under the plugin data dir, or a
-local dev build. Resolve the symlink first, PATH second:
+`bin/slop-cop` under the plugin root is a committed wrapper — a symlink to a
+shim that locates the `binrun` runner and execs the exact slop-cop release
+pinned in `bin/slop-cop.binrun`, downloading and caching it on first call.
+The plugin pre-warms it on session start, so it is usually already resolved.
+Use the wrapper first, PATH second:
 
 ```bash
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}"
-# Provision or refresh the managed symlink. Silent, idempotent, and tracks
-# the newest release — once per session is plenty.
-bash "${PLUGIN_ROOT}/scripts/install-binary.sh" || true
-# 1. The managed symlink (normal path).
+# 1. The committed binrun wrapper (normal path). The first call resolves and
+#    caches the pinned release; every call after is a cache hit.
 if [ -x "${PLUGIN_ROOT}/bin/slop-cop" ]; then
   SLOP_COP="${PLUGIN_ROOT}/bin/slop-cop"
 # 2. PATH fallback (CI, scripting, or a standalone install).
@@ -57,8 +56,8 @@ If *both* `CLAUDE_PLUGIN_ROOT` and `CURSOR_PLUGIN_ROOT` are unset (rare:
 running the skill outside both products), infer the plugin root from this
 SKILL.md's location: the plugin root is the directory two levels above this
 file (from `skills/slop-cop-prose/SKILL.md`, that's the repo root). The
-installer derives its paths from its own location, so
-`bash <plugin_root>/scripts/install-binary.sh` works the same way there.
+wrapper derives its paths from its own location, so
+`<plugin_root>/bin/slop-cop` works the same way there.
 
 ## Loop
 

@@ -28,3 +28,13 @@ vendor/
 # Zig cross-compile cache: setup-zig points ZIG_*_CACHE_DIR here, so a restored
 # cache lands in the worktree before goreleaser's dirty-tree check — ignore it.
 .zig-cache/
+
+# binrun wrapper: bin/ holds the committed dotslash symlink (bin/slop-cop) and
+# the version-exact descriptor (bin/slop-cop.binrun). The plugin root is the
+# repo root, so the Go `/bin/` ignore would otherwise hide them — re-expose the
+# dir, re-ignore its contents, then re-include just the two tracked files (the
+# `.vscode/` dance above).
+!/bin/
+/bin/*
+!/bin/slop-cop
+!/bin/slop-cop.binrun

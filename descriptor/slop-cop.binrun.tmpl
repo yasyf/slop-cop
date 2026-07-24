@@ -1,0 +1,49 @@
+#!/usr/bin/env binrun
+{
+  "schema": 1,
+  "name": "slop-cop",
+  "kind": "release-binary",
+  "version": {"static": "__VERSION__"},
+  "platforms": {
+    "macos-aarch64": {
+      "size": __SIZE_MACOS_AARCH64__,
+      "hash": "sha256",
+      "digest": "__DIGEST_MACOS_AARCH64__",
+      "format": "tar.gz",
+      "path": "slop-cop",
+      "providers": [
+        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v__VERSION__", "name": "__NAME_MACOS_AARCH64__"}
+      ]
+    },
+    "macos-x86_64": {
+      "size": __SIZE_MACOS_X86_64__,
+      "hash": "sha256",
+      "digest": "__DIGEST_MACOS_X86_64__",
+      "format": "tar.gz",
+      "path": "slop-cop",
+      "providers": [
+        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v__VERSION__", "name": "__NAME_MACOS_X86_64__"}
+      ]
+    },
+    "linux-x86_64": {
+      "size": __SIZE_LINUX_X86_64__,
+      "hash": "sha256",
+      "digest": "__DIGEST_LINUX_X86_64__",
+      "format": "tar.gz",
+      "path": "slop-cop",
+      "providers": [
+        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v__VERSION__", "name": "__NAME_LINUX_X86_64__"}
+      ]
+    },
+    "linux-aarch64": {
+      "size": __SIZE_LINUX_AARCH64__,
+      "hash": "sha256",
+      "digest": "__DIGEST_LINUX_AARCH64__",
+      "format": "tar.gz",
+      "path": "slop-cop",
+      "providers": [
+        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v__VERSION__", "name": "__NAME_LINUX_AARCH64__"}
+      ]
+    }
+  }
+}

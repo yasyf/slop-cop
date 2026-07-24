@@ -53,12 +53,15 @@ builds:
           output: true
 
 archives:
+  # Versioned tar.gz — the shape the binrun descriptor's render-descriptor.sh
+  # expects (<bin>_<version>_<os>_<arch>.tar.gz); goreleaser rewrites the cask
+  # URL to match, so the cask keeps consuming these.
   - id: slop-cop
     ids: [slop-cop]
     formats: [tar.gz]
-    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-  # Bare per-arch binaries for the plugin's install-binary.sh; the cask keeps
-  # consuming the tar.gz archives above. Both land in checksums.txt.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  # Bare per-arch binaries for install-binary.sh (version-less, resolved without
+  # a pinned version). Both archives land in checksums.txt.
   - id: binary
     ids: [slop-cop]
     formats: [binary]

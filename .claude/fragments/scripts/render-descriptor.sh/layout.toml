@@ -1,5 +1,5 @@
 fragments = [
-  { use = "cc-skills:binrun-shim", args = { binary = "slop-cop" } },
+  { use = "cc-skills:render-descriptor", args = { binary = "slop-cop" } },
 ]
 
 [sources.cc-skills]

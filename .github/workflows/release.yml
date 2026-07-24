@@ -39,3 +39,141 @@ jobs:
       signer: codesign
       setup-zig: "0.16.0"
       auto-tag: true
+
+  # Refresh the binrun descriptor + plugin.json in two homes, in lockstep with
+  # the release tag: this repo's own plugin root (its marketplace serves main
+  # HEAD) and the canonical cc-skills marketplace copy. Each home moves its
+  # descriptor and its plugin manifest together, in one [skip ci] commit, gated
+  # on the two agreeing before push — the uniformity requirement that keeps the
+  # CI agreement gate green after every release. release-go.yml exposes `tag`
+  # only as a job output (not a workflow_call output), so the tag is
+  # reconstructed from the same auto-tag scheme release-go.yml uses:
+  # v0.1.<run_number>, with github.run_number shared across the reusable call.
+  descriptor:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: v0.1.${{ github.run_number }}
+    steps:
+      - name: Check out slop-cop (main)
+        uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Check out cc-skills
+        uses: actions/checkout@v7
+        with:
+          repository: yasyf/cc-skills
+          ref: main
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: cc-skills
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p dist
+          gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" \
+            --dir dist --pattern '*.tar.gz' --pattern 'checksums.txt'
+      - name: Render descriptors + lockstep plugin.json (this repo + cc-skills)
+        run: |
+          version="${TAG#v}"
+          # This repo's own descriptor + manifest.
+          sh scripts/render-descriptor.sh dist "$version" > bin/slop-cop.binrun
+          chmod +x bin/slop-cop.binrun
+          tmp="$(mktemp)"
+          jq --arg v "$version" '.version = $v' .claude-plugin/plugin.json > "$tmp" \
+            && mv "$tmp" .claude-plugin/plugin.json
+          # The cc-skills marketplace copy.
+          skplugin=cc-skills/plugins/slop-cop/.claude-plugin/plugin.json
+          skdescriptor=cc-skills/plugins/slop-cop/bin/slop-cop.binrun
+          sh cc-skills/plugins/slop-cop/scripts/render-descriptor.sh dist "$version" > "$skdescriptor"
+          chmod +x "$skdescriptor"
+          tmp="$(mktemp)"
+          jq --arg v "$version" '.version = $v' "$skplugin" > "$tmp" && mv "$tmp" "$skplugin"
+      - name: Agreement gate (plugin.json version == descriptor version.static)
+        run: |
+          test "$(jq -r .version .claude-plugin/plugin.json)" \
+             = "$(tail -n +2 bin/slop-cop.binrun | jq -r .version.static)"
+          test "$(jq -r .version cc-skills/plugins/slop-cop/.claude-plugin/plugin.json)" \
+             = "$(tail -n +2 cc-skills/plugins/slop-cop/bin/slop-cop.binrun | jq -r .version.static)"
+      - name: Validate descriptors
+        run: |
+          cd "$RUNNER_TEMP"
+          go run github.com/yasyf/binrun/cmd/binrun@v0.1.1 -- parse \
+            "$GITHUB_WORKSPACE/bin/slop-cop.binrun"
+          go run github.com/yasyf/binrun/cmd/binrun@v0.1.1 -- parse \
+            "$GITHUB_WORKSPACE/cc-skills/plugins/slop-cop/bin/slop-cop.binrun"
+      - name: Commit descriptor + plugin.json to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bin/slop-cop.binrun .claude-plugin/plugin.json
+          if git diff --cached --quiet; then
+            echo "descriptor + plugin.json already at ${TAG#v}"
+            exit 0
+          fi
+          git commit -m "chore: sync slop-cop.binrun + plugin.json to ${TAG#v} [skip ci]"
+          for _ in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+          done
+          echo "::error::could not push descriptor + plugin.json to main after 3 attempts"
+          exit 1
+      - name: Commit + push to cc-skills
+        working-directory: cc-skills
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/slop-cop/bin/slop-cop.binrun plugins/slop-cop/.claude-plugin/plugin.json
+          if git diff --cached --quiet; then
+            echo "descriptor + plugin.json already at ${TAG#v}"
+            exit 0
+          fi
+          git commit -m "chore(slop-cop): refresh binrun descriptor + plugin.json to ${TAG#v} [skip ci]"
+          for _ in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+          done
+          echo "::error::could not push descriptor refresh to cc-skills after 3 attempts"
+          exit 1
+      - name: Upload descriptor to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$TAG" bin/slop-cop.binrun \
+            --repo "${GITHUB_REPOSITORY}" --clobber
+
+  # Keep the Cursor manifest's version in lockstep with the binary tag. The
+  # commit carries [skip ci] so it never re-triggers this release (a loop).
+  cursor-bump:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: v0.1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Bump .cursor-plugin/plugin.json to the release version
+        run: |
+          version="${TAG#v}"
+          plugin=.cursor-plugin/plugin.json
+          tmp="$(mktemp)"
+          jq --arg v "$version" '.version = $v' "$plugin" > "$tmp" && mv "$tmp" "$plugin"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$plugin"
+          if git diff --cached --quiet; then
+            echo "cursor plugin already at $version"
+            exit 0
+          fi
+          git commit -m "chore(cursor): bump plugin version to ${version} [skip ci]"
+          for _ in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+          done
+          echo "::error::could not push cursor version bump after 3 attempts"
+          exit 1

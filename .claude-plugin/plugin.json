@@ -1,11 +1,23 @@
 {
   "name": "slop-cop",
-  "description": "Detect and fix LLM-generated prose tells via the slop-cop CLI. Ships a self-review skill for the agent and bootstraps the binary on first use.",
-  "version": "0.1.4",
+  "description": "Detect and fix LLM-generated prose tells via the slop-cop CLI. Ships a self-review skill for the agent and resolves the version-exact binary through binrun from the committed bin/slop-cop.binrun descriptor, pre-warmed on session start.",
+  "version": "0.1.55",
   "author": {
     "name": "Yasyf Mohamedali",
     "url": "https://github.com/yasyf"
   },
   "homepage": "https://github.com/yasyf/slop-cop",
-  "license": "MIT"
+  "license": "MIT",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/slop-cop\" --version >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
 }

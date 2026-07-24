@@ -18,12 +18,10 @@ Run `slop-cop check` over the target prose and summarise the findings. Does
 ## Instructions
 
 1. **Resolve the binary.** Prefer
-   `${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}/bin/slop-cop` — a symlink
-   `install-binary.sh` maintains silently. If it is not present, provision it:
-   ```bash
-   bash "${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT}}/scripts/install-binary.sh"
-   ```
-   Fall back to `slop-cop` on `$PATH` if neither plugin root is set.
+   `${CLAUDE_PLUGIN_ROOT:-${CURSOR_PLUGIN_ROOT:-}}/bin/slop-cop` — a committed
+   wrapper that locates the `binrun` runner and execs the exact release pinned
+   in `bin/slop-cop.binrun`, caching it after the first call. Fall back to
+   `slop-cop` on `$PATH` if neither plugin root is set.
 
 2. **Pick the target.** In order of preference:
    - `$ARGUMENTS` if the user supplied a path or `-`.

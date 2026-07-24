@@ -4,8 +4,9 @@
 # Spawns a `claude -p` subshell with --plugin-dir pointed at this repo, feeds
 # it a prose-writing prompt laced with LLM tells, and asserts that:
 #
-#   1. The bootstrap installer ran and produced bin/slop-cop.
-#   2. The skill actually invoked `slop-cop check` via the Bash tool.
+#   1. The skill actually invoked `slop-cop check` via the Bash tool.
+#   2. The committed bin/slop-cop wrapper resolves the version-exact binary
+#      through binrun and runs.
 #
 # Requires an authenticated `claude` CLI (Claude Code subscription) on PATH.
 # Not wired into CI — run this manually after changing the plugin or skill.
@@ -13,9 +14,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 command -v claude >/dev/null || { echo "claude CLI not found on PATH" >&2; exit 1; }
-
-# Pre-clean any previously-bootstrapped binary so we exercise the install path.
-rm -rf bin
 
 PROMPT=$(cat <<'EOF'
 Write a short (~120-word) blog paragraph on why version control matters
@@ -51,11 +49,11 @@ if ! grep -qE '"command":"[^"]*slop-cop' "$stream"; then
 fi
 
 if [ ! -x bin/slop-cop ]; then
-  echo "FAIL: bootstrap installer did not produce bin/slop-cop" >&2
+  echo "FAIL: committed bin/slop-cop wrapper is missing" >&2
   tail -c 4000 "$stream" >&2 || true
   exit 1
 fi
 
-"$PWD/bin/slop-cop" version --pretty || { echo "FAIL: installed slop-cop cannot run" >&2; exit 1; }
+"$PWD/bin/slop-cop" version --pretty || { echo "FAIL: bin/slop-cop could not resolve or run the version-exact binary" >&2; exit 1; }
 
-echo "PASS: bootstrap installed bin/slop-cop and the skill invoked it"
+echo "PASS: bin/slop-cop resolved the version-exact binary and the skill invoked it"
