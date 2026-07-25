@@ -1,14 +1,11 @@
 name: Release
 
-# Every push to main auto-releases: release-go.yml tags v0.1.<run_number>, then
-# goreleaser builds (cgo tree-sitter; zig cross-compiles linux), codesigns the
-# darwin binaries, and publishes the cask. github.run_number stays monotonic as long as
-# this workflow file keeps its path (.github/workflows/release.yml).
+# A signed v* tag builds the cgo tree-sitter binaries, cross-compiles Linux
+# with zig, codesigns Darwin binaries, and publishes the cask.
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    tags: ["v*"]
 
 permissions:
   contents: write
@@ -32,13 +29,12 @@ jobs:
 
   release:
     needs: test
-    uses: yasyf/homebrew-tap/.github/workflows/release-go.yml@a0015cd88d2e6bef1a5c475a4e2cad5d875c7f47
+    uses: yasyf/homebrew-tap/.github/workflows/release-go.yml@7cc8a6c981cbec10fcb7f19bd75b36e9ee65ea7e
     secrets: inherit
     with:
       runner: macos-latest
       signer: codesign
       setup-zig: "0.16.0"
-      auto-tag: true
 
   # Refresh this repo's binrun descriptor + plugin.json in lockstep with the
   # release tag (the marketplace serves main HEAD): descriptor and manifest
@@ -47,17 +43,14 @@ jobs:
   # after every release. The canonical cc-skills marketplace copy refreshes
   # itself: HOMEBREW_TAP_TOKEN cannot push to cc-skills, so cc-skills runs a
   # pull-based slop-cop-descriptor.yml (daily + dispatch) with its own token.
-  # release-go.yml exposes `tag` only as a job output (not a workflow_call
-  # output), so the tag is reconstructed from the same auto-tag scheme
-  # release-go.yml uses: v0.1.<run_number>, with github.run_number shared
-  # across the reusable call.
+  # The signed trigger tag is the release identity.
   descriptor:
     needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      TAG: v0.1.${{ github.run_number }}
+      TAG: ${{ github.ref_name }}
     steps:
       - name: Check out slop-cop (main)
         uses: actions/checkout@v7
