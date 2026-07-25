@@ -6,8 +6,15 @@ on:
   repository_dispatch: {types: [cc-guides-render]}
   schedule: [{cron: "17 9 * * *"}]
   workflow_dispatch:
+    inputs:
+      commit:
+        description: Exact commit to render and verify
+        required: true
+        type: string
 permissions: {contents: write}
 jobs:
   guides:
     uses: yasyf/cc-guides/.github/workflows/guides.yml@main
+    with:
+      commit: ${{ inputs.commit || github.sha }}
     secrets: inherit

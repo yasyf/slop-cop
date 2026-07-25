@@ -108,17 +108,19 @@ jobs:
   # Keep the Cursor manifest's version in lockstep with the binary tag. The
   # commit carries [skip ci] so it never re-triggers this release (a loop).
   cursor-bump:
-    needs: release
+    needs: descriptor
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     env:
-      TAG: v0.1.${{ github.run_number }}
+      TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
       - name: Bump .cursor-plugin/plugin.json to the release version
+        id: commit
         run: |
           version="${TAG#v}"
           plugin=.cursor-plugin/plugin.json
@@ -127,13 +129,41 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$plugin"
-          if git diff --cached --quiet; then
-            echo "cursor plugin already at $version"
-            exit 0
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(cursor): bump plugin version to ${version} [skip ci]"
+            pushed=false
+            for _ in 1 2 3; do
+              if git pull --rebase origin main && git push origin HEAD:main; then
+                pushed=true
+                break
+              fi
+            done
+            if [ "$pushed" != true ]; then
+              echo "::error::could not push cursor version bump after 3 attempts"
+              exit 1
+            fi
           fi
-          git commit -m "chore(cursor): bump plugin version to ${version} [skip ci]"
-          for _ in 1 2 3; do
-            git pull --rebase origin main && git push origin HEAD:main && exit 0
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Dispatch and wait for post-release checks
+        env:
+          COMMIT: ${{ steps.commit.outputs.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pids=()
+          for workflow in ci.yml guides.yml; do
+            response="$(
+              jq -n --arg commit "$COMMIT" '{ref: "main", inputs: {commit: $commit}}' |
+                gh api --method POST \
+                  -H "X-GitHub-Api-Version: 2026-03-10" \
+                  "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/dispatches" \
+                  --input -
+            )"
+            run_id="$(jq -er '.workflow_run_id' <<<"$response")"
+            gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status &
+            pids+=("$!")
           done
-          echo "::error::could not push cursor version bump after 3 attempts"
-          exit 1
+          status=0
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"

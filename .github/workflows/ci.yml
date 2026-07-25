@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Exact commit to validate
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,6 +29,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.commit || github.sha }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -43,6 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.commit || github.sha }}
       - name: Assert plugin manifest and binrun descriptor agree on version
         run: |
           manifest="$(jq -r .version .claude-plugin/plugin.json)"
@@ -54,6 +64,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.commit || github.sha }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -68,6 +80,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.commit || github.sha }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
