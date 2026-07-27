@@ -1,6 +1,6 @@
 name: Release
 
-# A signed v* tag builds the cgo tree-sitter binaries, cross-compiles Linux
+# A v* tag builds the cgo tree-sitter binaries, cross-compiles Linux
 # with zig, codesigns Darwin binaries, and publishes the cask.
 
 on:
@@ -43,7 +43,7 @@ jobs:
   # after every release. The canonical cc-skills marketplace copy refreshes
   # itself: HOMEBREW_TAP_TOKEN cannot push to cc-skills, so cc-skills runs a
   # pull-based slop-cop-descriptor.yml (daily + dispatch) with its own token.
-  # The signed trigger tag is the release identity.
+  # The trigger tag is the release identity.
   descriptor:
     needs: release
     runs-on: ubuntu-latest
