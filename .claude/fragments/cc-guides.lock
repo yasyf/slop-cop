@@ -4,5 +4,5 @@ version = "0.1.53"
 artifacts = [".claude/settings.json", ".gitignore", ".mcp.json", ".pre-commit-config.yaml", "AGENTS.md", "CLAUDE.md", "scripts/install-binary.sh", "scripts/render-descriptor.sh"]
 
 [sources.cc-skills]
-spec = "github:yasyf/cc-skills@af5c33f7d479c0d05364fab9dcad550596213ddc"
+spec = "github:yasyf/cc-skills@main"
 commit = "af5c33f7d479c0d05364fab9dcad550596213ddc"
