@@ -1,0 +1,189 @@
+[
+ {
+  "type": "system",
+  "subtype": "init",
+  "model": "claude-haiku-4-5-20251001",
+  "cwd": "/tmp",
+  "session_id": "00000000-0000-0000-0000-000000000000"
+ },
+ {
+  "type": "assistant",
+  "message": {
+   "model": "claude-haiku-4-5-20251001",
+   "id": "msg_011CdYdPXFmb4CHVr9Sg8eTf",
+   "type": "message",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "thinking",
+     "thinking": "The user is asking me to identify two specific patterns in the provided text:\n1. \"throat-clearing\": preamble before the real point\n2. \"sycophantic-frame\": opening compliment\n\nLet me analyze the text carefully.\n\nThe text is the README for slop-cop, a tool that detects unwanted prose patterns in agent-generated text.\n\nLooking at the opening:\n- \"Never ship 'delve' again.\" - This is the hook/main point\n- \"slop-cop reads your agent's prose with 48 detectors and returns a JSON rap sheet the agent revises against, in CI, pre-commit, or inline.\" - This is the value proposition\n\nThen there are badges (CI, Release, License) - these are standard README elements.\n\nThen \"Get started\" section with brew install command.\n\nLooking for \"throat-clearing\" (preamble before the real point):\n- The opening line \"Never ship 'delve' again.\" is NOT throat-clearing - it's the main point\n- \"slop-cop reads your agent's prose...\" is NOT throat-clearing - it's the value prop\n- The badges are just standard format\n- The \"Get started\" section is direct\n\nI don't see obvious throat-clearing in the traditional sense (like \"It goes without saying...\" or \"As mentioned before...\").\n\nLooking for \"sycophantic-frame\" (opening compliment):\n- \"Never ship 'delve' again.\" - This is not a compliment to the reader\n- \"slop-cop reads your agent's prose with 48 detectors...\" - This is describing the tool\n- \"You ask for a PR description and get 'In today's fast-paced world' back \u2014 then you spend the review playing copy editor.\" - This is describing a problem, not a compliment\n- \"Install the plugin and its skill runs this loop on every draft, before the agent replies:\" - This is functional\n\nI don't see obvious sycophantic framing either.\n\nLet me re-read more carefully to see if I'm missing something.\nActually, the narrative description positions the reader's problem directly: \"You ask for a PR description and get 'In today's fast-paced world' back \u2014 then you spend the review playing copy editor.\" This frames the pain point without flattery. The README appears to be fairly direct and functional, jumping straight into describing the tool and its uses without much preamble or compliments to the reader. I should report whether violations are actually present in this text. Looking at the opening line and description more carefully, the text is quite direct\u2014it leads immediately with the value proposition without unnecessary preamble. There's no flattery or compliments directed at the reader either. The README appears clean from a slop-cop perspective, so I should return an empty violations array.",
+     "signature": "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"
+    }
+   ],
+   "stop_reason": null,
+   "stop_sequence": null,
+   "stop_details": null,
+   "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 49558,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 49558
+    },
+    "output_tokens": 4,
+    "service_tier": "standard",
+    "inference_geo": "not_available"
+   },
+   "diagnostics": null,
+   "context_management": null
+  },
+  "parent_tool_use_id": null,
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "uuid": "62c262a4-ecb5-4069-b05a-33a424da123d",
+  "timestamp": "2026-07-30T17:22:18.401Z",
+  "request_id": "req_011CdYdPWHV6KqxmcSvVPUYC"
+ },
+ {
+  "type": "assistant",
+  "message": {
+   "model": "claude-haiku-4-5-20251001",
+   "id": "msg_011CdYdPXFmb4CHVr9Sg8eTf",
+   "type": "message",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "tool_use",
+     "id": "toolu_01MRqmfDC6E6Yf64Vgq573YZ",
+     "name": "StructuredOutput",
+     "input": {
+      "violations": []
+     },
+     "caller": {
+      "type": "direct"
+     }
+    }
+   ],
+   "stop_reason": null,
+   "stop_sequence": null,
+   "stop_details": null,
+   "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 49558,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 49558
+    },
+    "output_tokens": 4,
+    "service_tier": "standard",
+    "inference_geo": "not_available"
+   },
+   "diagnostics": null,
+   "context_management": null
+  },
+  "parent_tool_use_id": null,
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "uuid": "a28ef282-c974-4f11-99a9-cf53059443d8",
+  "timestamp": "2026-07-30T17:22:18.408Z",
+  "request_id": "req_011CdYdPWHV6KqxmcSvVPUYC"
+ },
+ {
+  "type": "rate_limit_event",
+  "rate_limit_info": {
+   "status": "allowed_warning",
+   "resetsAt": 1785913200,
+   "rateLimitType": "seven_day",
+   "utilization": 0.54,
+   "isUsingOverage": false
+  },
+  "uuid": "307060b8-a1c6-4735-b3da-af1f0da5237f",
+  "session_id": "00000000-0000-0000-0000-000000000000"
+ },
+ {
+  "type": "user",
+  "message": {
+   "role": "user",
+   "content": [
+    {
+     "tool_use_id": "toolu_01MRqmfDC6E6Yf64Vgq573YZ",
+     "type": "tool_result",
+     "content": "Structured output provided successfully"
+    }
+   ]
+  },
+  "parent_tool_use_id": null,
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "uuid": "7ec795dd-8b6f-4ef7-8a2f-1e2f1ffb708d",
+  "timestamp": "2026-07-30T17:22:18.474Z",
+  "tool_use_result": "Structured output provided successfully"
+ },
+ {
+  "is_error": false,
+  "duration_api_ms": 12512,
+  "num_turns": 2,
+  "stop_reason": "tool_use",
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "total_cost_usd": 0.103876,
+  "usage": {
+   "input_tokens": 10,
+   "cache_creation_input_tokens": 49558,
+   "cache_read_input_tokens": 0,
+   "output_tokens": 950,
+   "server_tool_use": {
+    "web_search_requests": 0,
+    "web_fetch_requests": 0
+   },
+   "service_tier": "standard",
+   "cache_creation": {
+    "ephemeral_1h_input_tokens": 49558,
+    "ephemeral_5m_input_tokens": 0
+   },
+   "inference_geo": "not_available",
+   "iterations": [
+    {
+     "input_tokens": 10,
+     "output_tokens": 950,
+     "cache_read_input_tokens": 0,
+     "cache_creation_input_tokens": 49558,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 49558
+     },
+     "type": "message"
+    }
+   ],
+   "speed": "standard"
+  },
+  "modelUsage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 10,
+    "outputTokens": 950,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 49558,
+    "webSearchRequests": 0,
+    "costUSD": 0.103876,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty"
+   }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "fast_mode_disabled_reason": "sdk_opt_in_required",
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "{\"violations\":[]}",
+  "structured_output": {
+   "violations": []
+  },
+  "ttft_ms": 12908,
+  "ttft_stream_ms": 1873,
+  "time_to_request_ms": 419,
+  "type": "result",
+  "duration_ms": 13347,
+  "uuid": "a6d2cb01-8698-45f4-8062-ca702d2cd1a5"
+ }
+]

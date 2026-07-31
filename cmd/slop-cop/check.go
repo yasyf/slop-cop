@@ -15,6 +15,7 @@ import (
 	"github.com/yasyf/slop-cop/internal/lang"
 	"github.com/yasyf/slop-cop/internal/llm"
 	_ "github.com/yasyf/slop-cop/internal/markdown" // lang registry
+	"github.com/yasyf/slop-cop/internal/readability"
 	"github.com/yasyf/slop-cop/internal/rules"
 	"github.com/yasyf/slop-cop/internal/types"
 )
@@ -36,6 +37,11 @@ type checkReport struct {
 	LLMEffort string `json:"llm_effort"`
 	// LLM captures per-tier outcomes. Omitted entirely when effort=off.
 	LLM *llmReport `json:"llm,omitempty"`
+	// Readability is advisory, never a violation: it carries no span, so it
+	// is absent from Violations and both count maps, and --lines does not
+	// filter it. Omitted when the base layer is off or the prose is too
+	// short to score.
+	Readability *readability.Report `json:"readability,omitempty"`
 }
 
 // llmReport captures the outcome of the two LLM passes. Either sub-field
@@ -89,6 +95,42 @@ func resolveLang(langFlag, path string) (lang.Analyzer, string, error) {
 	return a, a.Name(), nil
 }
 
+// standardLayer selects which rule layers a run executes.
+type standardLayer string
+
+const (
+	standardAll  standardLayer = "all"
+	standardSlop standardLayer = "slop"
+	standardBase standardLayer = "base"
+)
+
+// resolveStandard maps --standard onto a layer selection. An unknown value is
+// a usage error.
+func resolveStandard(standardFlag string) (standardLayer, error) {
+	pick := strings.ToLower(standardFlag)
+	if pick == "" {
+		pick = "all"
+	}
+	switch standardLayer(pick) {
+	case standardAll, standardSlop, standardBase:
+		return standardLayer(pick), nil
+	}
+	return "", fmt.Errorf("invalid --standard value %q (want all|slop|base)", pick)
+}
+
+// catalogue returns the rules this layer selection puts in front of the LLM
+// passes. Slop first in All is load-bearing: buildRulePrompt numbers rules by
+// position, so the slop-only prompt is the head of the combined one.
+func (s standardLayer) catalogue() []types.ViolationRule {
+	switch s {
+	case standardSlop:
+		return rules.Slop
+	case standardBase:
+		return rules.Base
+	}
+	return rules.All
+}
+
 // llmEffort is the canonical effort level for the LLM passes.
 type llmEffort string
 
@@ -98,39 +140,23 @@ const (
 	effortHigh llmEffort = "high"
 )
 
-// pluginEnvActive reports whether the process is running under a Claude Code
-// or Cursor plugin invocation. Both products export PLUGIN_ROOT env vars
-// into their tool subshells; we use their presence as a signal that the
-// user's Claude subscription is reachable via the `claude` CLI.
-func pluginEnvActive() bool {
-	return os.Getenv("CLAUDE_PLUGIN_ROOT") != "" || os.Getenv("CURSOR_PLUGIN_ROOT") != ""
-}
-
 // autoEnableLLM returns true when the LLM passes should be auto-enabled for
-// this invocation: the plugin environment is present AND the `claude`
-// binary is actually on $PATH. Both conditions are required so that running
-// the CLI outside a plugin (or in a plugin environment that lacks the
-// subscription binary) never silently burns API credits.
-func autoEnableLLM(claudeBin string) bool {
-	if !pluginEnvActive() {
-		return false
-	}
-	if _, err := exec.LookPath(claudeBin); err != nil {
-		return false
-	}
-	return true
+// this invocation: the `claude` CLI is on $PATH.
+func autoEnableLLM() bool {
+	_, err := exec.LookPath("claude")
+	return err == nil
 }
 
 // resolveEffort picks the LLM effort level for this run. Precedence:
 //  1. --llm-effort when explicitly set (authoritative);
 //  2. --llm-deep (sugar alias: true→high, false→off), over
 //  3. --llm        (sugar alias: true→low,  false→off);
-//  4. no explicit flags → auto (plugin-aware default).
+//  4. no explicit flags → auto (claude-availability default).
 //
 // The second return value is true when the chosen effort came from the
 // auto-default — that's what distinguishes fail-open (auto) from
 // fail-closed (explicit) error handling for the LLM passes.
-func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag bool, claudeBin string) (llmEffort, bool, error) {
+func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag bool) (llmEffort, bool, error) {
 	if cmd.Flags().Changed("llm-effort") {
 		switch strings.ToLower(effortFlag) {
 		case "off":
@@ -140,7 +166,7 @@ func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag bool
 		case "high":
 			return effortHigh, false, nil
 		case "", "auto":
-			return autoEffort(claudeBin), true, nil
+			return autoEffort(), true, nil
 		default:
 			return effortOff, false, fmt.Errorf("invalid --llm-effort %q (want off|low|high|auto)", effortFlag)
 		}
@@ -158,11 +184,11 @@ func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag bool
 		}
 		return effortOff, false, nil
 	}
-	return autoEffort(claudeBin), true, nil
+	return autoEffort(), true, nil
 }
 
-func autoEffort(claudeBin string) llmEffort {
-	if autoEnableLLM(claudeBin) {
+func autoEffort() llmEffort {
+	if autoEnableLLM() {
 		return effortHigh
 	}
 	return effortOff
@@ -179,11 +205,12 @@ func newCheckCmd() *cobra.Command {
 		docTO     time.Duration
 		langMode  string
 		linesFlag string
+		standard  string
 	)
 	cmd := &cobra.Command{
 		Use:   "check [path|-]",
 		Short: "Run detectors over a file (or stdin) and emit a JSON report.",
-		Long: `Runs all 35 client-side detectors by default. Two optional LLM passes
+		Long: `Runs the 42 client-side rules by default. Two optional LLM passes
 run via the claude CLI:
 
   low   sentence-tier semantic analysis (Claude Haiku)
@@ -193,9 +220,8 @@ Choose one with --llm-effort (off|low|high|auto), or use the sugar aliases:
   --llm       → --llm-effort=low
   --llm-deep  → --llm-effort=high
 
-Under a Claude Code or Cursor plugin (detected via CLAUDE_PLUGIN_ROOT /
-CURSOR_PLUGIN_ROOT) and when the claude CLI is on $PATH, --llm-effort=auto
-resolves to 'high'; otherwise 'off'. Auto-enabled passes fail open (the
+When the claude CLI is on $PATH, --llm-effort=auto resolves to 'high';
+otherwise 'off'. Auto-enabled passes fail open (the
 failure is reported under 'llm.<tier>.error' and the client-side results
 are still returned); explicit passes propagate the error as exit code 3.
 
@@ -216,6 +242,15 @@ Pick a mode with --lang:
 Suppressions inside masked modes drop structural false positives
 (e.g. 'dramatic-fragment' on headings, 'staccato-burst' across list items).
 
+Rules come in two layers, both on by default. Pick with --standard:
+
+  all    (default) both layers.
+  slop   the original LLM-tell catalogue: does this sound like an LLM?
+  base   the plain-language base layer: can this be read once and understood?
+
+The selection applies to the LLM passes too — a layer left out never reaches
+the prompt.
+
 Use --lines to report only the violations that begin within a 1-based inclusive
 line range, while still scanning the whole document for context — useful for
 linting just the lines an edit touched:
@@ -229,9 +264,8 @@ linting just the lines an edit touched:
   slop-cop check - --lang=markdown --llm-effort=high < article.md`,
 		Args: cobra.MaximumNArgs(1),
 	}
-	claudeBin := addClaudeBinFlag(cmd)
 	pretty := addPrettyFlag(cmd)
-	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = high under plugin context, off otherwise.")
+	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = high when the claude CLI is on $PATH, off otherwise.")
 	cmd.Flags().BoolVar(&llmFlag, "llm", false, "Alias for --llm-effort=low (sentence tier via Claude Haiku).")
 	cmd.Flags().BoolVar(&deepFlag, "llm-deep", false, "Alias for --llm-effort=high (sentence + document tiers, Haiku + Sonnet).")
 	cmd.Flags().StringVar(&sentModel, "sentence-model", llm.DefaultSentenceModel, "Model slug for the sentence pass.")
@@ -240,8 +274,14 @@ linting just the lines an edit touched:
 	cmd.Flags().DurationVar(&docTO, "document-timeout", llm.DefaultDocumentTimeout, "Timeout for the document pass.")
 	cmd.Flags().StringVar(&langMode, "lang", "auto", "Input language: auto|text|markdown|html|jsx|tsx|ts|js.")
 	cmd.Flags().StringVar(&linesFlag, "lines", "", "Restrict the report to a 1-based inclusive line range, e.g. 50:80 (open-ended 50: or :80; a bare 50 is one line). Detectors still run over the full input.")
+	cmd.Flags().StringVar(&standard, "standard", "all", "Rule layers to run: all (both), slop (the original LLM-tell catalogue), base (the plain-language base layer).")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		std, err := resolveStandard(standard)
+		if err != nil {
+			return usageError{err: err}
+		}
+
 		path := pathArg(args)
 		text, err := readInput(path)
 		if err != nil {
@@ -259,7 +299,7 @@ linting just the lines an edit touched:
 			return usageError{err: err}
 		}
 
-		eff, auto, err := resolveEffort(cmd, effort, llmFlag, deepFlag, *claudeBin)
+		eff, auto, err := resolveEffort(cmd, effort, llmFlag, deepFlag)
 		if err != nil {
 			return usageError{err: err}
 		}
@@ -280,7 +320,13 @@ linting just the lines an edit touched:
 			scanText, suppress = m, s
 		}
 
-		violations := detectors.RunClient(scanText)
+		var violations []types.Violation
+		if std != standardBase {
+			violations = detectors.RunClient(scanText)
+		}
+		if std != standardSlop {
+			violations = append(violations, detectors.RunBase(scanText)...)
+		}
 
 		var llmRep *llmReport
 		ensureReport := func() *llmReport {
@@ -291,7 +337,7 @@ linting just the lines an edit touched:
 		}
 
 		if runSentence {
-			opts := llm.Options{Bin: *claudeBin, Model: sentModel, Timeout: sentTO}
+			opts := llm.Options{Model: sentModel, Timeout: sentTO, Rules: std.catalogue()}
 			vs, err := llm.RunSentence(ctx, scanText, opts)
 			if err != nil {
 				if auto {
@@ -306,7 +352,7 @@ linting just the lines an edit touched:
 			}
 		}
 		if runDocument {
-			opts := llm.Options{Bin: *claudeBin, Model: docModel, Timeout: docTO}
+			opts := llm.Options{Model: docModel, Timeout: docTO, Rules: std.catalogue()}
 			vs, err := llm.RunDocument(ctx, scanText, opts)
 			if err != nil {
 				if auto {
@@ -320,9 +366,9 @@ linting just the lines an edit touched:
 				ensureReport().Document = &llmPassStatus{Auto: auto, Ran: true}
 			}
 		}
-		if runSentence || runDocument {
-			violations = detectors.Deduplicate(violations)
-		}
+		// Unconditional: the two client layers share the elevated-register rule
+		// ID, so a merged run can collide without any LLM pass having run.
+		violations = detectors.Deduplicate(violations)
 
 		if analyzer != nil {
 			violations = analyzer.ApplySuppressions(violations, suppress, text)
@@ -336,6 +382,13 @@ linting just the lines an edit touched:
 			violations = []types.Violation{}
 		}
 
+		// Scored over the masked text, so code spans and fences don't skew the
+		// grade, and so the score describes the same prose the detectors saw.
+		var read *readability.Report
+		if std != standardSlop {
+			read = readability.Analyze(scanText)
+		}
+
 		report := checkReport{
 			TextLength:       len(text),
 			Violations:       violations,
@@ -344,6 +397,7 @@ linting just the lines an edit touched:
 			Lang:             langName,
 			LLMEffort:        string(eff),
 			LLM:              llmRep,
+			Readability:      read,
 		}
 		for _, v := range violations {
 			report.CountsByRule[v.RuleID]++

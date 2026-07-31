@@ -16,6 +16,7 @@ const (
 	CategoryRhetorical        ViolationCategory = "rhetorical"
 	CategoryStructural        ViolationCategory = "structural"
 	CategoryFraming           ViolationCategory = "framing"
+	CategoryBase              ViolationCategory = "base"
 )
 
 // LLMTier identifies which LLM pass produces a rule's detections.

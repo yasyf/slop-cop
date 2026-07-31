@@ -36,13 +36,6 @@ func addPrettyFlag(cmd *cobra.Command) *bool {
 	return &pretty
 }
 
-// addClaudeBinFlag wires the shared --claude-bin flag onto cmd.
-func addClaudeBinFlag(cmd *cobra.Command) *string {
-	var bin string
-	cmd.Flags().StringVar(&bin, "claude-bin", "claude", "Path to the claude CLI binary.")
-	return &bin
-}
-
 // sortViolations orders violations deterministically by (start, end, rule)
 // so consumers get stable JSON regardless of which detector produced the
 // hit. Sort is stable so ties preserve input order.

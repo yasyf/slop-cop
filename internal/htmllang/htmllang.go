@@ -128,11 +128,18 @@ func (Analyzer) ApplySuppressions(vs []types.Violation, suppress []lang.Range, o
 	out := make([]types.Violation, 0, len(vs))
 	for _, v := range vs {
 		switch v.RuleID {
-		case "dramatic-fragment":
+		case "dramatic-fragment", "long-sentence":
 			if lang.Overlaps(v.StartIndex, v.EndIndex, suppress, lang.KindHeading) {
 				continue
 			}
 		case "staccato-burst":
+			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindListItem) >= 2 {
+				continue
+			}
+		case "long-paragraph":
+			if lang.Overlaps(v.StartIndex, v.EndIndex, suppress, lang.KindHeading) {
+				continue
+			}
 			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindListItem) >= 2 {
 				continue
 			}

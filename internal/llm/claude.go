@@ -1,126 +1,70 @@
 // Package llm drives the optional semantic and document analysis passes by
-// shelling out to the `claude` CLI (`claude -p --output-format json
-// --json-schema ...`). This reuses the user's Claude subscription without
-// requiring an API key to be threaded through slop-cop directly.
+// running the `claude` CLI through spawnllm. This reuses the user's Claude
+// subscription without requiring an API key to be threaded through slop-cop
+// directly.
 package llm
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
-	"strings"
+	"os"
 	"time"
+
+	spawnllm "github.com/yasyf/spawnllm/go"
 )
 
 // Config captures the knobs for a single claude invocation.
 type Config struct {
-	// Bin is the path or name of the claude CLI; empty means "claude".
-	Bin string
-	// Model is the model slug passed via --model, e.g. claude-haiku-4-5-20251001.
+	// Model is a literal provider model id, e.g. claude-haiku-4-5-20251001.
 	Model string
-	// Timeout bounds a single invocation; zero means no bound.
+	// Timeout bounds each attempt; zero picks spawnllm's 180s default.
 	Timeout time.Duration
-	// ExtraArgs is appended before the final user-prompt argument for callers
-	// who need to pass flags like --max-budget-usd.
-	ExtraArgs []string
-}
-
-// resultEnvelope is the top-level shape printed by `claude -p --output-format json`.
-// Fields unused by slop-cop are deliberately omitted.
-type resultEnvelope struct {
-	Type             string          `json:"type"`
-	Subtype          string          `json:"subtype"`
-	IsError          bool            `json:"is_error"`
-	Result           json.RawMessage `json:"result"`
-	StructuredResult json.RawMessage `json:"structured_result"`
-	Error            string          `json:"error"`
-	SessionID        string          `json:"session_id"`
 }
 
 // RunSchema invokes claude with a JSON-schema constraint on the response and
-// decodes the structured payload into out. The `user` prompt becomes the
-// positional argument; the `system` string is appended to claude's default
-// system prompt via --append-system-prompt.
+// decodes the structured payload into out. The `system` string replaces
+// claude's default system prompt — appending instead leaves the
+// interactive-agent framing in place, and the model answers as a coding session
+// rather than performing the task. Transient provider failures retry with
+// backoff inside spawnllm; ctx bounds the whole call across attempts.
 func RunSchema(ctx context.Context, cfg Config, system, user string, schema json.RawMessage, out any) error {
-	bin := cfg.Bin
-	if bin == "" {
-		bin = "claude"
+	// UseHostConfig keeps the user's credentials reachable; spawnllm's isolated
+	// mode seeds them from account.json/credentials.json, neither of which
+	// exists when claude stores its login in the macOS keychain. Dir is the
+	// counterweight: claude discovers a project CLAUDE.md by walking up from
+	// its working directory, so running from a scratch dir keeps the analysed
+	// document's own repo instructions out of the detector's context.
+	scratch, err := os.MkdirTemp("", "slop-cop-llm-")
+	if err != nil {
+		return fmt.Errorf("claude: scratch dir: %w", err)
 	}
+	defer func() { _ = os.RemoveAll(scratch) }()
 
-	if cfg.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
-		defer cancel()
-	}
-
-	args := []string{
-		"-p",
-		"--output-format", "json",
-		"--json-schema", string(schema),
+	spec := spawnllm.RunSpec{
+		Prompt:        user,
+		Model:         cfg.Model,
+		Schema:        schema,
+		UseHostConfig: true,
+		Dir:           scratch,
+		Timeout:       cfg.Timeout,
 	}
 	if system != "" {
-		args = append(args, "--append-system-prompt", system)
-	}
-	if cfg.Model != "" {
-		args = append(args, "--model", cfg.Model)
-	}
-	args = append(args, cfg.ExtraArgs...)
-	args = append(args, user)
-
-	cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // G204: bin and args are the configured LLM CLI invocation this provider exists to run.
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return fmt.Errorf("claude: timed out after %s", cfg.Timeout)
-		}
-		detail := strings.TrimSpace(stderr.String())
-		if detail == "" {
-			detail = strings.TrimSpace(stdout.String())
-		}
-		return fmt.Errorf("claude: %w: %s", err, truncate(detail, 400))
+		spec.Providers.Claude = &spawnllm.ClaudeConfig{SystemPrompt: system}
 	}
 
-	var env resultEnvelope
-	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
-		return fmt.Errorf("claude: unrecognised output (%w): %s", err, truncate(stdout.String(), 400))
+	resp, err := spawnllm.RunOn(ctx, spawnllm.ClaudeBackend(), spec)
+	if err != nil {
+		return err
 	}
-	if env.IsError {
-		msg := env.Error
-		if msg == "" {
-			msg = string(env.Result)
-		}
-		return fmt.Errorf("claude reported error: %s", truncate(msg, 400))
+	if resp.Err != nil {
+		return resp.Err
 	}
 
-	payload := env.StructuredResult
-	if len(payload) == 0 {
-		payload = env.Result
-	}
-	if len(payload) == 0 {
-		return errors.New("claude: empty result payload")
-	}
-
-	// `result` arrives either as a JSON object/array (validated against the
-	// schema) or as a JSON string containing the serialised object. Handle
-	// both cases so the caller can rely on a structured unmarshal.
-	if len(payload) > 0 && payload[0] == '"' {
-		var s string
-		if err := json.Unmarshal(payload, &s); err != nil {
-			return fmt.Errorf("claude: result envelope (%w): %s", err, truncate(string(payload), 400))
-		}
-		if err := json.Unmarshal([]byte(s), out); err != nil {
-			return fmt.Errorf("claude: decoding result string (%w): %s", err, truncate(s, 400))
-		}
-		return nil
-	}
-	if err := json.Unmarshal(payload, out); err != nil {
-		return fmt.Errorf("claude: decoding result object (%w): %s", err, truncate(string(payload), 400))
+	// RunOn resolves the schema payload to Result.Raw: claude's terminal
+	// result field, a JSON string of the structured output.
+	if err := json.Unmarshal([]byte(resp.Result.Raw), out); err != nil {
+		return fmt.Errorf("claude: decoding result (%w): %s", err, truncate(resp.Result.Raw, 400))
 	}
 	return nil
 }

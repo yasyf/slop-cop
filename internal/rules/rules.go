@@ -4,8 +4,8 @@ package rules
 
 import "github.com/yasyf/slop-cop/internal/types"
 
-// All is the canonical ordered list of rules.
-var All = []types.ViolationRule{
+// Slop is the canonical ordered list of the slop-layer rules.
+var Slop = []types.ViolationRule{
 	// ── Word Choice ──────────────────────────────────────────────────────────
 	{
 		ID:           "overused-intensifiers",

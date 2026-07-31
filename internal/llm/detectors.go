@@ -11,25 +11,29 @@ import (
 	"github.com/yasyf/slop-cop/internal/types"
 )
 
-// Default models and timeouts match the TS source.
+// Default models match the TS source; timeouts are provisioned for the
+// measured latency of the current claude CLI, which the TS-source values
+// under-shot.
 const (
 	DefaultSentenceModel = "claude-haiku-4-5-20251001"
 	DefaultDocumentModel = "claude-sonnet-4-6"
 
-	DefaultSentenceTimeout = 30 * time.Second
-	DefaultDocumentTimeout = 60 * time.Second
+	DefaultSentenceTimeout = 120 * time.Second
+	DefaultDocumentTimeout = 180 * time.Second
 
 	chunkThreshold = 4000
 	chunkSize      = 3500
 )
 
-// Options governs an LLM detection or rewrite invocation. Bin, extra args and
-// model may be overridden; zero values pick TS-source defaults.
+// Options governs an LLM detection or rewrite invocation. Model and timeout
+// may be overridden; zero values pick the defaults above.
 type Options struct {
-	Bin       string
-	Model     string
-	Timeout   time.Duration
-	ExtraArgs []string
+	Model   string
+	Timeout time.Duration
+	// Rules is the catalogue the detection prompt is built from. Layer
+	// selection happens here, before the prompt exists, so a rule the caller
+	// leaves out is never put in front of the model.
+	Rules []types.ViolationRule
 }
 
 func (o Options) config(defaultModel string, defaultTimeout time.Duration) Config {
@@ -41,7 +45,7 @@ func (o Options) config(defaultModel string, defaultTimeout time.Duration) Confi
 	if timeout == 0 {
 		timeout = defaultTimeout
 	}
-	return Config{Bin: o.Bin, Model: model, Timeout: timeout, ExtraArgs: o.ExtraArgs}
+	return Config{Model: model, Timeout: timeout}
 }
 
 type llmResult struct {
@@ -59,9 +63,10 @@ type violationsEnvelope struct {
 // are chunked on paragraph boundaries, analysed in parallel, and merged.
 func RunSentence(ctx context.Context, text string, opts Options) ([]types.Violation, error) {
 	cfg := opts.config(DefaultSentenceModel, DefaultSentenceTimeout)
+	prompt := BuildSentencePrompt(opts.Rules)
 	chunks := chunkText(text)
 	if len(chunks) == 1 {
-		return callDetector(ctx, cfg, SentenceSystemPrompt, BuildSentencePrompt(), text, text)
+		return callDetector(ctx, cfg, SentenceSystemPrompt, prompt, text, text)
 	}
 
 	results := make([][]types.Violation, len(chunks))
@@ -71,7 +76,7 @@ func RunSentence(ctx context.Context, text string, opts Options) ([]types.Violat
 		wg.Add(1)
 		go func(i int, chunk string) {
 			defer wg.Done()
-			vs, err := callDetector(ctx, cfg, SentenceSystemPrompt, BuildSentencePrompt(), chunk, text)
+			vs, err := callDetector(ctx, cfg, SentenceSystemPrompt, prompt, chunk, text)
 			if err != nil {
 				errs[i] = err
 				return
@@ -103,7 +108,7 @@ func RunSentence(ctx context.Context, text string, opts Options) ([]types.Violat
 // RunDocument is the deep-pass (Sonnet) document-level detector.
 func RunDocument(ctx context.Context, text string, opts Options) ([]types.Violation, error) {
 	cfg := opts.config(DefaultDocumentModel, DefaultDocumentTimeout)
-	return callDetector(ctx, cfg, DocumentSystemPrompt, BuildDocumentPrompt(), text, text)
+	return callDetector(ctx, cfg, DocumentSystemPrompt, BuildDocumentPrompt(opts.Rules), text, text)
 }
 
 func callDetector(ctx context.Context, cfg Config, system, rulesPrompt, analyse, full string) ([]types.Violation, error) {

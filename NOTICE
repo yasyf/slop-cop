@@ -27,6 +27,9 @@ and word lists in the following files are derived from awnist/slop-cop:
     internal/llm/rewrite.go            (src/detectors/llmDetectors.ts)
     internal/detectors/word_patterns_test.go (src/detectors/__tests__/wordPatterns.test.ts)
 
+internal/llm/claude.go (the LLM invocation layer, built on spawnllm) is
+original to this repository and derives nothing from awnist/slop-cop.
+
 At the time this port was made (April 2026), the awnist/slop-cop repository
 did not carry an explicit open-source licence. Its package.json declared
 `"private": true` and the GitHub repository metadata reported
@@ -55,14 +58,77 @@ taxonomy:
   - tropes.md
     https://tropes.fyi/tropes-md
 
+ASD-STE100 (Simplified Technical English)
+-----------------------------------------
+
+The rules in the "base" category (slop-cop's base layer) are original
+works, written for this project and released under the MIT License.
+They are inspired by ASD-STE100, Simplified Technical English, Issue 9,
+15 January 2025, a standard published by ASD (AeroSpace and Defence
+Industries Association of Europe), Brussels. ASD holds the copyright in the
+standard, and "ASD-STE100" is ASD's trademark, used here nominatively to
+identify the standard.
+
+No text of ASD-STE100 is reproduced anywhere in this repository: not its
+rule wording, not its examples, and no part of its Dictionary.
+
+The following mapping is bibliographic citation only, recording which parts
+of the standard inspired each base rule:
+
+    long-sentence       inspired by STE rule 6.3, at a 40-word threshold
+                        rather than the standard's 20/25
+    long-paragraph      inspired by STE rule 6.6
+    passive-voice       inspired by STE rule 3.6
+    agentless-passive   inspired by STE rule 3.6
+    padded-verb         inspired by STE rule 3.4
+    missing-hyphen      inspired by STE rule 8.2
+    term-consistency    inspired by STE rule 1.11, implemented as
+                        within-document consistency only, not the standard's
+                        approved-noun requirement
+    expletive-opener    from general plain-language guidance, not STE
+    nominalization      from general plain-language guidance, not STE
+
+Passing slop-cop's checks is NOT conformance with ASD-STE100. The thresholds
+deliberately differ from the standard's, the Dictionary-driven rules are not
+implemented at all, and slop-cop is not affiliated with, endorsed by, or
+certified by ASD.
+
+The plain-word substitution list in internal/detectors/plainwords_data.go
+was compiled from general English usage references and public-domain
+plain-language guidance. It was not derived from the STE Dictionary or from
+any reconstruction of it. Two third-party word lists were considered as
+sources and rejected: openste/openste and dfch/biz.dfch.AsdSte100Vocab are
+unverified reconstructions of ASD-copyrighted content, and the latter both
+self-declares that it is not affiliated with or endorsed by ASD and is
+licensed AGPL-3.0, which is incompatible with this project's MIT
+distribution.
+
+The standard itself is available free of charge from ASD on request at
+https://asd-ste100.org, under ASD's own terms, which do not permit general
+public redistribution.
+
 Third-party Go dependencies
 ---------------------------
 
 This binary links against the following third-party Go modules at runtime:
 
-  - github.com/spf13/cobra                (Apache-2.0)
-  - github.com/spf13/pflag                (BSD-3-Clause)
-  - github.com/inconshreveable/mousetrap  (Apache-2.0)
+  - github.com/spf13/cobra                        (Apache-2.0)
+  - github.com/spf13/pflag                        (BSD-3-Clause)
+  - github.com/inconshreveable/mousetrap          (Apache-2.0)
+  - github.com/yasyf/spawnllm/go                  (MIT)
+  - github.com/tetratelabs/wazero                 (Apache-2.0)
+  - github.com/invopop/jsonschema                 (MIT)
+  - github.com/buger/jsonparser                   (MIT)
+  - github.com/bahlo/generic-list-go              (BSD-3-Clause)
+  - github.com/pb33f/ordered-map/v2               (Apache-2.0)
+  - go.yaml.in/yaml/v4                            (MIT / Apache-2.0)
+  - github.com/yuin/goldmark                      (MIT)
+  - github.com/tree-sitter/go-tree-sitter         (MIT)
+  - github.com/tree-sitter/tree-sitter-javascript (MIT)
+  - github.com/tree-sitter/tree-sitter-typescript (MIT)
+  - github.com/mattn/go-pointer                   (MIT)
+  - golang.org/x/net                              (BSD-3-Clause)
+  - golang.org/x/sys                              (BSD-3-Clause)
 
 Their licences apply to their respective source; see go.sum and the module
 caches for details.

@@ -1,0 +1,9 @@
+Read the entire piece as an editor. Identify these document-level patterns:
+
+1. "dead-metaphor": The same metaphor, image, or conceptual frame recurs 3 or more times across the piece mechanically rather than intentionally. A single metaphor is a choice; the same one appearing every few paragraphs is a crutch. Flag a later instance (not the first), since repetition is the problem.
+
+2. "one-point-dilution": The same core claim or argument appears across multiple paragraphs restated with different words, examples, or metaphors, but adding no new information. The piece pads a simple thesis. Flag the most redundant restatement — a sentence or clause that says something already said.
+
+3. "fractal-summaries": Meta-commentary that previews or recaps content rather than delivering it: "In this section, we will explore...", "As we have seen...", "To summarize what we have covered...", "What follows is an examination of...". Flag only genuine content-free structural signposting, not substantive transitions.
+
+Return only clear cases. If the piece is short, tight, or well-structured, return [].

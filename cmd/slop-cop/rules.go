@@ -18,7 +18,7 @@ func newRulesCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 	pretty := addPrettyFlag(cmd)
-	cmd.Flags().StringVar(&category, "category", "", "Filter by category (word-choice, sentence-structure, rhetorical, structural, framing).")
+	cmd.Flags().StringVar(&category, "category", "", "Filter by category (word-choice, sentence-structure, rhetorical, structural, framing, base).")
 	cmd.Flags().BoolVar(&llmOnly, "llm-only", false, "Only show rules that require the LLM passes.")
 
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yasyf/slop-cop/internal/rules"
 	"github.com/yasyf/slop-cop/internal/types"
 )
 
@@ -19,9 +18,12 @@ Be conservative — only flag clear, unambiguous instances.`
 const DocumentSystemPrompt = `You are an experienced editor reading a complete piece of writing to identify structural and compositional problems that only become visible at document scale — patterns that emerge across paragraphs rather than within a single sentence.
 Be conservative — only flag clear, unambiguous cases.`
 
-// BuildSentencePrompt mirrors buildLLMRulesPrompt() in the TS source.
-func BuildSentencePrompt() string {
+// BuildSentencePrompt mirrors buildLLMRulesPrompt() in the TS source. The
+// caller supplies the catalogue, so a run restricted to one layer never puts
+// the other layer's rules in front of the model.
+func BuildSentencePrompt(catalogue []types.ViolationRule) string {
 	return buildRulePrompt(
+		catalogue,
 		types.LLMTierSentence,
 		"Identify these patterns:",
 		"For suggestedChange: rewrite only the matched span. Make it direct and concrete.",
@@ -29,18 +31,21 @@ func BuildSentencePrompt() string {
 }
 
 // BuildDocumentPrompt mirrors buildDocumentRulesPrompt().
-func BuildDocumentPrompt() string {
+func BuildDocumentPrompt(catalogue []types.ViolationRule) string {
 	return buildRulePrompt(
+		catalogue,
 		types.LLMTierDocument,
 		"Read the entire piece as an editor. Identify these document-level patterns:",
 		"Return only clear cases. If the piece is short, tight, or well-structured, return [].",
 	)
 }
 
-func buildRulePrompt(tier types.LLMTier, header, footer string) string {
+// buildRulePrompt numbers the tier's rules 1..N in catalogue order, so a
+// catalogue whose head is unchanged produces an unchanged numbering.
+func buildRulePrompt(catalogue []types.ViolationRule, tier types.LLMTier, header, footer string) string {
 	var parts []string
 	i := 1
-	for _, r := range rules.All {
+	for _, r := range catalogue {
 		if r.LLMTier != tier {
 			continue
 		}

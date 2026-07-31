@@ -9,11 +9,12 @@ import (
 	"github.com/yasyf/slop-cop/internal/rules"
 )
 
-// Default knobs for the rewrite call. Ported from rewriteParagraph() in
-// src/detectors/llmDetectors.ts (model claude-haiku-4-5-20251001, 20s).
+// The rewrite model matches rewriteParagraph() in the TS source; the timeout
+// is provisioned for the measured latency of the current claude CLI, which
+// the TS-source 20s under-shot.
 const (
 	DefaultRewriteModel   = "claude-haiku-4-5-20251001"
-	DefaultRewriteTimeout = 20 * time.Second
+	DefaultRewriteTimeout = 60 * time.Second
 )
 
 // RewriteDefaultRuleIDs are always included as directives in the rewrite

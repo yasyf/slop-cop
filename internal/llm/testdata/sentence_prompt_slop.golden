@@ -1,0 +1,25 @@
+Identify these patterns:
+
+1. "triple-construction": Exactly 3 parallel grammatical items where the items are structurally parallel phrases. This includes the classic "X, Y, and Z" comma-list form, and also "from X to Y to Z" / "from X to Y and Z" constructions where three parallel noun phrases or clauses are stacked. Do not flag 2-item or 4+ item lists.
+
+2. "throat-clearing": An opening paragraph that adds zero information and could be deleted without any loss of meaning. Flag only if it's the very first paragraph.
+
+3. "sycophantic-frame": Text that opens by complimenting the question, assignment, or topic ("Great question," "This is a fascinating topic," etc.).
+
+4. "balanced-take": A sentence that makes a point then immediately softens it into nothing — reflexive RLHF-style hedging that negates the original claim.
+
+5. "unnecessary-elaboration": A sentence that continues past the point where it was already finished, restating its own point in slightly different words within the same sentence or immediately adjacent clause. Example: "The reform failed. It did not succeed, and the attempt to change things did not work out as intended." — the second sentence adds nothing the first didn't already say. This is strictly a within-sentence or single-sentence pattern. Do NOT flag cross-paragraph patterns (that is one-point-dilution, a separate rule). Do NOT flag an analogy or concept introduced in one paragraph being purposefully extended or applied to a new domain in a subsequent paragraph — that is development, not elaboration.
+
+6. "empathy-performance": Generic emotional language applicable to any situation ("I understand this can be difficult," "Your feelings are valid," etc.).
+
+7. "pivot-paragraph": A one-sentence paragraph containing zero new information — only transitions between surrounding paragraphs.
+
+8. "false-range": A "from X to Y" construction where X and Y are not on any meaningful spectrum or scale — used as a fancy way to list two loosely related things rather than express a genuine range. Also flag hollow idioms like "doesn't come from nowhere" / "doesn't emerge from nowhere" that use "from" as clichéd filler. Flag only clear cases. For matchedText, capture the full verb phrase containing the hollow construction (e.g. "doesn't emerge from nowhere"), not just the prepositional fragment.
+
+9. "grandiose-stakes": Inflating the significance of an ordinary point to world-historical importance ("will fundamentally reshape how we think about everything", "will define the next era of computing", "has implications for the future of humanity") without substantiation.
+
+10. "historical-analogy": Rapid-fire listing of famous companies or tech revolutions stacked together to build false authority by association ("Apple didn't build Uber. Facebook didn't build Spotify..."; "the web, mobile, social, cloud, AI"). Flag when the historical references are decorative rather than analytically necessary.
+
+11. "false-vulnerability": Performative self-awareness or simulated honesty that reads as staged rather than genuine ("And yes, I'll admit...", "I'll be honest with you", "Let's be real:", "And yes, since we're being honest"). Real vulnerability is specific and uncomfortable; flag when it sounds polished and risk-free.
+
+For suggestedChange: rewrite only the matched span. Make it direct and concrete.

@@ -32,7 +32,6 @@ JSON document containing the rewritten text.`,
   slop-cop rewrite - --rules filler-adverbs,hedge-stack < draft.txt`,
 		Args: cobra.MaximumNArgs(1),
 	}
-	claudeBin := addClaudeBinFlag(cmd)
 	pretty := addPrettyFlag(cmd)
 	cmd.Flags().StringSliceVar(&ruleList, "rules", nil, "Comma-separated rule IDs whose rewrite hints should be added to the prompt.")
 	cmd.Flags().StringVar(&model, "model", llm.DefaultRewriteModel, "Model slug for the rewrite call.")
@@ -50,7 +49,7 @@ JSON document containing the rewritten text.`,
 			return usageError{err: err}
 		}
 
-		opts := llm.Options{Bin: *claudeBin, Model: model, Timeout: timeout}
+		opts := llm.Options{Model: model, Timeout: timeout}
 		rewritten, err := llm.RewriteParagraph(ctx, text, hints, opts)
 		if err != nil {
 			return llmError{err: err}

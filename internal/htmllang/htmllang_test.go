@@ -95,6 +95,53 @@ func TestApplySuppressionsDropsHeadingDramaticFragment(t *testing.T) {
 	}
 }
 
+func TestApplySuppressionsDropsLengthRulesInHeading(t *testing.T) {
+	src := "<h1>A heading carrying far more words than any reasonable prose sentence would ever need to carry</h1>"
+	_, suppress, _ := htmllang.Analyzer{}.Analyze(src)
+	start := strings.Index(src, "A heading")
+	end := strings.Index(src, "</h1>")
+	vs := []types.Violation{
+		{RuleID: "long-sentence", StartIndex: start, EndIndex: end},
+		{RuleID: "long-paragraph", StartIndex: start, EndIndex: end},
+	}
+	out := htmllang.Analyzer{}.ApplySuppressions(vs, suppress, src)
+	if len(out) != 0 {
+		t.Fatalf("both length rules inside a heading should be suppressed; got %+v", out)
+	}
+}
+
+func TestApplySuppressionsDropsLongParagraphAcrossListItems(t *testing.T) {
+	src := "<ul><li>alpha runs.</li><li>beta runs.</li><li>gamma runs.</li></ul>"
+	_, suppress, _ := htmllang.Analyzer{}.Analyze(src)
+	vs := []types.Violation{
+		{RuleID: "long-paragraph", StartIndex: 0, EndIndex: len(src)},
+	}
+	out := htmllang.Analyzer{}.ApplySuppressions(vs, suppress, src)
+	if len(out) != 0 {
+		t.Fatalf("long-paragraph across list items should be suppressed; got %+v", out)
+	}
+}
+
+// TestApplySuppressionsKeepsLengthRulesInProse is the narrowness proof: the
+// document carries a heading and a list, so both suppression ranges are
+// live, yet length hits on a paragraph touching neither still stand.
+func TestApplySuppressionsKeepsLengthRulesInProse(t *testing.T) {
+	prose := "The build runs first. The tests run next. The linter follows after that. " +
+		"The report lands last. None of this is a list. None of this is a heading. " +
+		"The paragraph simply sprawls onward. That is the rule's whole point."
+	src := "<h1>Pipeline</h1><ul><li>one</li><li>two</li></ul><p>" + prose + "</p>"
+	_, suppress, _ := htmllang.Analyzer{}.Analyze(src)
+	start := strings.Index(src, prose)
+	vs := []types.Violation{
+		{RuleID: "long-sentence", StartIndex: start, EndIndex: start + len(prose)},
+		{RuleID: "long-paragraph", StartIndex: start, EndIndex: start + len(prose)},
+	}
+	out := htmllang.Analyzer{}.ApplySuppressions(vs, suppress, src)
+	if len(out) != 2 {
+		t.Fatalf("length rules on body prose should survive; got %+v", out)
+	}
+}
+
 func TestApplySuppressionsRestoresMatchedText(t *testing.T) {
 	src := "<p>Hello, world.</p>"
 	_, suppress, _ := htmllang.Analyzer{}.Analyze(src)

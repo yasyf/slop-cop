@@ -2,71 +2,34 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
 )
 
-// realExecutable returns an absolute path to a binary guaranteed to exist
-// on every supported platform: the test binary itself. Tests that need
-// "a binary exec.LookPath will find" use this instead of hard-coding
-// /bin/sh, which doesn't exist on Windows.
-func realExecutable(t *testing.T) string {
+// pathWithClaude returns a PATH holding exactly one entry: a directory
+// containing an executable named claude.
+func pathWithClaude(t *testing.T) string {
 	t.Helper()
-	p, err := os.Executable()
-	if err != nil {
-		t.Fatalf("os.Executable: %v", err)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec // G306: an executable stub on a test-owned temp PATH.
+		t.Fatalf("write fake claude: %v", err)
 	}
-	return p
+	return dir
 }
 
-// Tests for pluginEnvActive + autoEnableLLM. autoEnableLLM must require
-// BOTH a plugin-env signal AND a reachable claude binary so the CLI never
-// silently tries to spend credits outside a plugin context.
-
-func TestPluginEnvActive(t *testing.T) {
-	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
-	t.Setenv("CURSOR_PLUGIN_ROOT", "")
-	if pluginEnvActive() {
-		t.Fatalf("pluginEnvActive: expected false with both env empty")
-	}
-	t.Setenv("CLAUDE_PLUGIN_ROOT", "/x")
-	if !pluginEnvActive() {
-		t.Fatalf("pluginEnvActive: expected true with CLAUDE_PLUGIN_ROOT set")
-	}
-	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
-	t.Setenv("CURSOR_PLUGIN_ROOT", "/y")
-	if !pluginEnvActive() {
-		t.Fatalf("pluginEnvActive: expected true with CURSOR_PLUGIN_ROOT set")
-	}
-}
+// Tests for autoEnableLLM. The LLM passes are auto-enabled whenever the
+// claude CLI is reachable on $PATH.
 
 func TestAutoEnableLLM(t *testing.T) {
-	cases := []struct {
-		name   string
-		claude string
-		cEnv   string
-		curEnv string
-		want   bool
-	}{
-		{"no env, no bin", "nonexistent-binary-xyzzy", "", "", false},
-		{"claude env, missing bin", "nonexistent-binary-xyzzy", "/tmp/fake", "", false},
-		{"cursor env, missing bin", "nonexistent-binary-xyzzy", "", "/tmp/fake", false},
-		{"claude env, real bin", "", "/tmp/fake", "", true},
-		{"cursor env, real bin", "", "", "/tmp/fake", true},
+	t.Setenv("PATH", pathWithClaude(t))
+	if !autoEnableLLM() {
+		t.Fatalf("autoEnableLLM: expected true with claude on PATH")
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			t.Setenv("CLAUDE_PLUGIN_ROOT", c.cEnv)
-			t.Setenv("CURSOR_PLUGIN_ROOT", c.curEnv)
-			bin := c.claude
-			if bin == "" {
-				bin = realExecutable(t)
-			}
-			if got := autoEnableLLM(bin); got != c.want {
-				t.Fatalf("autoEnableLLM=%v, want %v", got, c.want)
-			}
-		})
+	t.Setenv("PATH", t.TempDir())
+	if autoEnableLLM() {
+		t.Fatalf("autoEnableLLM: expected false with claude absent from PATH")
 	}
 }
 
@@ -87,62 +50,56 @@ func newCheckForTest(t *testing.T, args []string) *cobra.Command {
 	return cmd
 }
 
-// TestResolveEffort exercises the full precedence table. realBin is used
-// whenever the auto path should pick "high"; "missing-bin" when it should
-// pick "off".
+// TestResolveEffort exercises the full precedence table. claudeOnPath drives
+// whether the auto path picks "high" or "off".
 func TestResolveEffort(t *testing.T) {
-	realBin := realExecutable(t)
-	const missingBin = "nonexistent-binary-xyzzy"
-
 	cases := []struct {
-		name      string
-		flags     []string
-		pluginEnv bool
-		bin       string
-		wantEff   llmEffort
-		wantAuto  bool
+		name         string
+		flags        []string
+		claudeOnPath bool
+		wantEff      llmEffort
+		wantAuto     bool
 	}{
 		// Explicit --llm-effort is authoritative.
-		{"effort=off explicit", []string{"--llm-effort=off"}, true, realBin, effortOff, false},
-		{"effort=low explicit", []string{"--llm-effort=low"}, true, realBin, effortLow, false},
-		{"effort=high explicit", []string{"--llm-effort=high"}, false, missingBin, effortHigh, false},
-		{"effort=auto under plugin", []string{"--llm-effort=auto"}, true, realBin, effortHigh, true},
-		{"effort=auto outside plugin", []string{"--llm-effort=auto"}, false, missingBin, effortOff, true},
+		{"effort=off explicit", []string{"--llm-effort=off"}, true, effortOff, false},
+		{"effort=low explicit", []string{"--llm-effort=low"}, true, effortLow, false},
+		{"effort=high explicit", []string{"--llm-effort=high"}, false, effortHigh, false},
+		{"effort=auto with claude", []string{"--llm-effort=auto"}, true, effortHigh, true},
+		{"effort=auto without claude", []string{"--llm-effort=auto"}, false, effortOff, true},
 
 		// --llm-deep alias.
-		{"--llm-deep=true", []string{"--llm-deep"}, false, missingBin, effortHigh, false},
-		{"--llm-deep=false", []string{"--llm-deep=false"}, true, realBin, effortOff, false},
+		{"--llm-deep=true", []string{"--llm-deep"}, false, effortHigh, false},
+		{"--llm-deep=false", []string{"--llm-deep=false"}, true, effortOff, false},
 
 		// --llm alias.
-		{"--llm=true", []string{"--llm"}, false, missingBin, effortLow, false},
-		{"--llm=false", []string{"--llm=false"}, true, realBin, effortOff, false},
+		{"--llm=true", []string{"--llm"}, false, effortLow, false},
+		{"--llm=false", []string{"--llm=false"}, true, effortOff, false},
 
 		// --llm-deep wins over --llm when both present.
-		{"--llm + --llm-deep", []string{"--llm", "--llm-deep"}, false, missingBin, effortHigh, false},
+		{"--llm + --llm-deep", []string{"--llm", "--llm-deep"}, false, effortHigh, false},
 
 		// --llm-effort wins over both aliases.
-		{"effort=low + --llm-deep", []string{"--llm-effort=low", "--llm-deep"}, false, missingBin, effortLow, false},
+		{"effort=low + --llm-deep", []string{"--llm-effort=low", "--llm-deep"}, false, effortLow, false},
 
 		// No flags → auto.
-		{"default under plugin", nil, true, realBin, effortHigh, true},
-		{"default outside plugin", nil, false, missingBin, effortOff, true},
+		{"default with claude", nil, true, effortHigh, true},
+		{"default without claude", nil, false, effortOff, true},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if c.pluginEnv {
-				t.Setenv("CLAUDE_PLUGIN_ROOT", "/tmp/fake-plugin")
+			if c.claudeOnPath {
+				t.Setenv("PATH", pathWithClaude(t))
 			} else {
-				t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+				t.Setenv("PATH", t.TempDir())
 			}
-			t.Setenv("CURSOR_PLUGIN_ROOT", "")
 
 			cmd := newCheckForTest(t, c.flags)
 			effortFlag, _ := cmd.Flags().GetString("llm-effort")
 			llm, _ := cmd.Flags().GetBool("llm")
 			deep, _ := cmd.Flags().GetBool("llm-deep")
 
-			eff, auto, err := resolveEffort(cmd, effortFlag, llm, deep, c.bin)
+			eff, auto, err := resolveEffort(cmd, effortFlag, llm, deep)
 			if err != nil {
 				t.Fatalf("resolveEffort: %v", err)
 			}
@@ -157,11 +114,9 @@ func TestResolveEffort(t *testing.T) {
 }
 
 func TestResolveEffort_InvalidFlag(t *testing.T) {
-	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
-	t.Setenv("CURSOR_PLUGIN_ROOT", "")
 	cmd := newCheckForTest(t, []string{"--llm-effort=turbo"})
 	effortFlag, _ := cmd.Flags().GetString("llm-effort")
-	if _, _, err := resolveEffort(cmd, effortFlag, false, false, realExecutable(t)); err == nil {
+	if _, _, err := resolveEffort(cmd, effortFlag, false, false); err == nil {
 		t.Fatalf("expected error for --llm-effort=turbo")
 	}
 }
