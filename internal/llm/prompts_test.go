@@ -46,6 +46,9 @@ func TestPromptsCarryTheirTier(t *testing.T) {
 	}
 }
 
+// readGolden drops the single trailing newline the repo's end-of-file-fixer
+// pre-commit hook adds to every file. A prompt never ends in a newline, so the
+// comparison stays exact on the bytes that matter.
 func readGolden(t *testing.T, name string) string {
 	t.Helper()
 	//nolint:gosec // G304: a fixed testdata path, not user input.
@@ -53,7 +56,7 @@ func readGolden(t *testing.T, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(b)
+	return strings.TrimSuffix(string(b), "\n")
 }
 
 // TestSlopPromptsMatchPreBaseLayerGoldens is the prompt half of the layer
