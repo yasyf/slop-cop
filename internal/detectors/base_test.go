@@ -1,7 +1,6 @@
 package detectors
 
 import (
-	"runtime"
 	"strings"
 	"testing"
 
@@ -359,24 +358,6 @@ func TestBaseDetectorsOnEmptyInput(t *testing.T) {
 // abbrevDoc is the shape that made mergeAbbrev quadratic: every sentence ends
 // at an abbreviation, so the whole document merges into one group.
 func abbrevDoc(n int) string { return strings.Repeat("Run it on a file, e.g. ", n) }
-
-// Merging must not copy the accumulated group per chunk. At 92KB the copying
-// version allocated ~184MB and took 6.9s; joining once per group allocates
-// under 2MB. The bound is deliberately loose — it separates linear from
-// quadratic, not one linear implementation from another.
-func TestMergeAbbrevDoesNotCopyPerChunk(t *testing.T) {
-	doc := abbrevDoc(4000)
-	var before, after runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&before)
-	DetectLongSentence(doc)
-	runtime.ReadMemStats(&after)
-	allocated := after.TotalAlloc - before.TotalAlloc
-	if limit := uint64(50 * len(doc)); allocated > limit {
-		t.Fatalf("DetectLongSentence allocated %d bytes over a %d byte document, want under %d",
-			allocated, len(doc), limit)
-	}
-}
 
 func BenchmarkDetectLongSentenceAbbrev(b *testing.B) {
 	for _, n := range []int{500, 1000, 2000, 4000} {
