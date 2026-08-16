@@ -35,6 +35,7 @@ jobs:
       runner: macos-latest
       signer: codesign
       setup-zig: "0.16.0"
+      pre-build: echo "MACOS_CODESIGN_ENTITLEMENTS=$GITHUB_WORKSPACE/.github/macos-entitlements.plist" >> "$GITHUB_ENV"
 
   # Refresh this repo's binrun descriptor + plugin.json in lockstep with the
   # release tag (the marketplace serves main HEAD): descriptor and manifest

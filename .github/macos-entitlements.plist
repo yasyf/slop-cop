@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- spawnllm pulls in wazero, whose arm64 compiler writes generated code into
+       anonymous VM_ALLOCATE pages and mprotects them r-x. Under the hardened
+       runtime that is unsigned executable memory, so the kernel SIGKILLs the
+       process at the first LLM tier with no stderr and a CODESIGNING /
+       "Invalid Page" termination. --llm-effort=off never reaches wazero, which
+       is why only the LLM tiers died. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+</dict>
+</plist>
