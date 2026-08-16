@@ -83,12 +83,12 @@ root. The wrapper derives its paths from its own location, and
    template quasis, and JSX text.
 
    With the `claude` CLI on `$PATH`, the default `--llm-effort=auto`
-   resolves to `high` and runs both LLM tiers. The `llm_effort` and `llm`
+   resolves to `low` and runs the sentence tier. The `llm_effort` and `llm`
    fields in the report tell you what actually ran; when `claude` is
    unreachable, slop-cop reports the auto-enabled passes as skipped with an
    `error` message and still returns the client-side results. Pass
-   `--llm-effort=off`, or `--llm-effort=low` for the sentence tier alone, to
-   cut cost or latency on small edits. Pass `--standard=slop` or
+   `--llm-effort=off` to cut latency to nothing on small edits, or
+   `--llm-deep` to add the document tier. Pass `--standard=slop` or
    `--standard=base` to run a single rule layer; the default runs both.
 
 3. **Revise.** Fix slop-layer hits first, applying the canonical fix for
@@ -167,7 +167,7 @@ the user sees.
 
 Two LLM passes layer on top of the 42 client-side rules, selected via
 `--llm-effort=off|low|high|auto`. `auto` is the default and resolves to
-`high` when the `claude` CLI is on `$PATH`, so usually you don't need to
+`low` when the `claude` CLI is on `$PATH`, so usually you don't need to
 think about it.
 
 | Effort | Passes run                                 | Extra rules caught                               |

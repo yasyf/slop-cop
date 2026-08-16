@@ -189,7 +189,7 @@ func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag bool
 
 func autoEffort() llmEffort {
 	if autoEnableLLM() {
-		return effortHigh
+		return effortLow
 	}
 	return effortOff
 }
@@ -220,7 +220,7 @@ Choose one with --llm-effort (off|low|high|auto), or use the sugar aliases:
   --llm       → --llm-effort=low
   --llm-deep  → --llm-effort=high
 
-When the claude CLI is on $PATH, --llm-effort=auto resolves to 'high';
+When the claude CLI is on $PATH, --llm-effort=auto resolves to 'low';
 otherwise 'off'. Auto-enabled passes fail open (the
 failure is reported under 'llm.<tier>.error' and the client-side results
 are still returned); explicit passes propagate the error as exit code 3.
@@ -265,7 +265,7 @@ linting just the lines an edit touched:
 		Args: cobra.MaximumNArgs(1),
 	}
 	pretty := addPrettyFlag(cmd)
-	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = high when the claude CLI is on $PATH, off otherwise.")
+	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = low when the claude CLI is on $PATH, off otherwise.")
 	cmd.Flags().BoolVar(&llmFlag, "llm", false, "Alias for --llm-effort=low (sentence tier via Claude Haiku).")
 	cmd.Flags().BoolVar(&deepFlag, "llm-deep", false, "Alias for --llm-effort=high (sentence + document tiers, Haiku + Sonnet).")
 	cmd.Flags().StringVar(&sentModel, "sentence-model", llm.DefaultSentenceModel, "Model slug for the sentence pass.")

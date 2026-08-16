@@ -51,7 +51,7 @@ func newCheckForTest(t *testing.T, args []string) *cobra.Command {
 }
 
 // TestResolveEffort exercises the full precedence table. claudeOnPath drives
-// whether the auto path picks "high" or "off".
+// whether the auto path picks "low" or "off".
 func TestResolveEffort(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -64,7 +64,7 @@ func TestResolveEffort(t *testing.T) {
 		{"effort=off explicit", []string{"--llm-effort=off"}, true, effortOff, false},
 		{"effort=low explicit", []string{"--llm-effort=low"}, true, effortLow, false},
 		{"effort=high explicit", []string{"--llm-effort=high"}, false, effortHigh, false},
-		{"effort=auto with claude", []string{"--llm-effort=auto"}, true, effortHigh, true},
+		{"effort=auto with claude", []string{"--llm-effort=auto"}, true, effortLow, true},
 		{"effort=auto without claude", []string{"--llm-effort=auto"}, false, effortOff, true},
 
 		// --llm-deep alias.
@@ -82,7 +82,7 @@ func TestResolveEffort(t *testing.T) {
 		{"effort=low + --llm-deep", []string{"--llm-effort=low", "--llm-deep"}, false, effortLow, false},
 
 		// No flags → auto.
-		{"default with claude", nil, true, effortHigh, true},
+		{"default with claude", nil, true, effortLow, true},
 		{"default without claude", nil, false, effortOff, true},
 	}
 
