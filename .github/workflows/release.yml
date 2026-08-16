@@ -37,8 +37,13 @@ jobs:
       setup-zig: "0.16.0"
       # spawnllm pulls in wazero, whose arm64 compiler mprotects anonymous pages
       # r-x. Under the hardened runtime that is unsigned executable memory, so
-      # the kernel SIGKILLs every LLM tier without allow-jit. Keep the plist free
-      # of XML comments: AMFIUnserializeXML rejects them and codesign fails.
+      # the kernel SIGKILLs every LLM tier. allow-jit alone is NOT enough: it
+      # only covers MAP_JIT regions and wazero uses plain mmap+mprotect, so
+      # allow-unsigned-executable-memory is the one that matters (v0.1.61
+      # shipped allow-jit only and still died). Keep the plist free of XML
+      # comments: AMFIUnserializeXML rejects them and codesign fails.
+      # Ad-hoc signatures do not enforce any of this, so only a real
+      # Developer ID build can verify the fix.
       pre-build: echo "MACOS_CODESIGN_ENTITLEMENTS=$GITHUB_WORKSPACE/.github/macos-entitlements.plist" >> "$GITHUB_ENV"
 
   # Refresh this repo's binrun descriptor + plugin.json in lockstep with the
