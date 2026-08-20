@@ -3,46 +3,46 @@
   "schema": 1,
   "name": "slop-cop",
   "kind": "release-binary",
-  "version": {"static": "0.1.62"},
+  "version": {"static": "0.1.63"},
   "platforms": {
     "macos-aarch64": {
-      "size": 4527881,
+      "size": 4858470,
       "hash": "sha256",
-      "digest": "a284633a19740deaf40d30562a9c0d5410d758b0c2f0c9d1d0c096481774f413",
+      "digest": "450bc551419e34d9067ab3931185efd241e93641d1ab367eef721221023d1d0c",
       "format": "tar.gz",
       "path": "slop-cop",
       "providers": [
-        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v0.1.62", "name": "slop-cop_0.1.62_darwin_arm64.tar.gz"}
+        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v0.1.63", "name": "slop-cop_0.1.63_darwin_arm64.tar.gz"}
       ]
     },
     "macos-x86_64": {
-      "size": 5015056,
+      "size": 5379803,
       "hash": "sha256",
-      "digest": "6643f7a137c254107a3b2fc3c949519f1701caad9eb9bbf8bf550c3429f30d94",
+      "digest": "e5dab9517113442c6d55fd045e5efab21dfca8939131d4026e0eada585b8c82c",
       "format": "tar.gz",
       "path": "slop-cop",
       "providers": [
-        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v0.1.62", "name": "slop-cop_0.1.62_darwin_amd64.tar.gz"}
+        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v0.1.63", "name": "slop-cop_0.1.63_darwin_amd64.tar.gz"}
       ]
     },
     "linux-x86_64": {
-      "size": 5901315,
+      "size": 6276073,
       "hash": "sha256",
-      "digest": "eeff1293a937522ce9302ed34e02c361eb8adf9ecbd56179bc108196769178e0",
+      "digest": "0133cfe0f2b7003c2f6c782002ed3606c93325e4fcf7238cdf80b3f95c05eace",
       "format": "tar.gz",
       "path": "slop-cop",
       "providers": [
-        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v0.1.62", "name": "slop-cop_0.1.62_linux_amd64.tar.gz"}
+        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v0.1.63", "name": "slop-cop_0.1.63_linux_amd64.tar.gz"}
       ]
     },
     "linux-aarch64": {
-      "size": 5501393,
+      "size": 5846401,
       "hash": "sha256",
-      "digest": "720148344f76481c5ebdd9181732933f61b951067469bafaf13eb24fa437b38e",
+      "digest": "5d98ed52c3012e8af6e3143ce152cf30073c0d13e4a8351da3898d0c13239348",
       "format": "tar.gz",
       "path": "slop-cop",
       "providers": [
-        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v0.1.62", "name": "slop-cop_0.1.62_linux_arm64.tar.gz"}
+        {"type": "github-release", "repo": "yasyf/slop-cop", "tag": "v0.1.63", "name": "slop-cop_0.1.63_linux_arm64.tar.gz"}
       ]
     }
   }
