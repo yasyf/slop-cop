@@ -84,10 +84,10 @@ func TestSlopPromptsMatchPreBaseLayerGoldens(t *testing.T) {
 	}
 }
 
-// TestAllPromptAppendsBaseAfterSlop pins the numbering contract: the combined
-// catalogue reproduces the slop-only prompt's numbered entries verbatim and in
-// order, then continues, so no existing rule's number moves.
-func TestAllPromptAppendsBaseAfterSlop(t *testing.T) {
+// TestAllPromptAppendsLaterLayersAfterSlop pins the numbering contract: the
+// combined catalogue reproduces the slop-only prompt's numbered entries
+// verbatim and in order, then continues, so no existing rule's number moves.
+func TestAllPromptAppendsLaterLayersAfterSlop(t *testing.T) {
 	cases := []struct {
 		tier types.LLMTier
 		slop string
@@ -109,8 +109,8 @@ func TestAllPromptAppendsBaseAfterSlop(t *testing.T) {
 				}
 			}
 			for _, entry := range allEntries[len(slopEntries):] {
-				if !ruleIsBase(entry) {
-					t.Fatalf("entry appended after the slop block is not a base rule: %q", entry)
+				if !ruleIsBase(entry) && !ruleIsGoogle(entry) {
+					t.Fatalf("entry appended after the slop block is neither a base nor a google rule: %q", entry)
 				}
 			}
 		})
@@ -186,6 +186,15 @@ func promptEntries(prompt string) []string {
 }
 
 // ruleIsBase reports whether a numbered prompt entry names a base-layer rule.
+func ruleIsGoogle(entry string) bool {
+	for _, r := range rules.Google {
+		if strings.Contains(entry, `"`+r.ID+`":`) {
+			return true
+		}
+	}
+	return false
+}
+
 func ruleIsBase(entry string) bool {
 	for _, r := range rules.Base {
 		if strings.Contains(entry, `"`+r.ID+`":`) {

@@ -199,21 +199,26 @@ func TestResolveStandard(t *testing.T) {
 }
 
 // TestStandardCataloguePartitionsTheRules pins the contract the LLM prompt
-// depends on: slop then base, with All the exact concatenation.
+// depends on: slop, then base, then google, with All the exact concatenation.
 func TestStandardCataloguePartitionsTheRules(t *testing.T) {
-	slop, base, all := standardSlop.catalogue(), standardBase.catalogue(), standardAll.catalogue()
-	if len(all) != len(slop)+len(base) {
-		t.Fatalf("all=%d, slop=%d, base=%d; All is not the concatenation", len(all), len(slop), len(base))
+	slop, base := standardSlop.catalogue(), standardBase.catalogue()
+	google, all := standardGoogle.catalogue(), standardAll.catalogue()
+	if len(all) != len(slop)+len(base)+len(google) {
+		t.Fatalf("all=%d, slop=%d, base=%d, google=%d; All is not the concatenation",
+			len(all), len(slop), len(base), len(google))
 	}
-	for i, r := range slop {
-		if all[i].ID != r.ID {
-			t.Fatalf("All[%d] = %s, want the slop rule %s; slop is no longer the head", i, all[i].ID, r.ID)
+	layers := []struct {
+		name  string
+		rules []types.ViolationRule
+	}{{"slop", slop}, {"base", base}, {"google", google}}
+	at := 0
+	for _, layer := range layers {
+		for i, r := range layer.rules {
+			if all[at+i].ID != r.ID {
+				t.Fatalf("All[%d] = %s, want the %s rule %s", at+i, all[at+i].ID, layer.name, r.ID)
+			}
 		}
-	}
-	for i, r := range base {
-		if all[len(slop)+i].ID != r.ID {
-			t.Fatalf("All[%d] = %s, want the base rule %s", len(slop)+i, all[len(slop)+i].ID, r.ID)
-		}
+		at += len(layer.rules)
 	}
 }
 

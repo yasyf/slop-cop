@@ -8,12 +8,18 @@ allowed-tools: Bash(slop-cop:*), Bash(bash:*), Read
 
 Before returning a piece of prose to the user, whether a blog paragraph, a
 doc, a PR description, a commit message, a release note, or an email, run it
-through `slop-cop` and revise. The check covers two rule layers. The slop
-layer catches LLM writing tells such as overused intensifiers, filler
-adverbs, negation pivots, em-dash abuse, throat-clearing, and hedge stacks.
-The base layer underneath catches plain-language clarity problems such as
-40-word sentences, padded verbs, and passives that demote their actor, and
-those fire on human-sounding prose just as readily.
+through `slop-cop` and revise. The check covers three rule layers. The
+google layer is the house style: 169 rules ported from the Google developer
+documentation style guide, covering voice, tense, headings, links,
+punctuation, and word choice. The slop layer catches LLM writing tells such
+as overused intensifiers, filler adverbs, negation pivots, em-dash abuse,
+throat-clearing, and hedge stacks. The base layer catches plain-language
+clarity problems such as 40-word sentences, padded verbs, and passives that
+demote their actor, and those fire on human-sounding prose just as readily.
+
+Where the google layer and an older rule disagree, the google layer wins the
+span it matched, and the older rule keeps firing everywhere else. You do not
+have to arbitrate that; slop-cop already has.
 
 This is a **self-review** loop. The draft and the review tool are both
 yours; the user sees only the revised result.
@@ -88,11 +94,31 @@ root. The wrapper derives its paths from its own location, and
    unreachable, slop-cop reports the auto-enabled passes as skipped with an
    `error` message and still returns the client-side results. Pass
    `--llm-effort=off` to cut latency to nothing on small edits, or
-   `--llm-deep` to add the document tier. Pass `--standard=slop` or
-   `--standard=base` to run a single rule layer; the default runs both.
+   `--llm-deep` to add the document tier. Pass `--standard=slop`,
+   `--standard=base`, or `--standard=google` to run a single rule layer; the
+   default runs all three.
 
-3. **Revise.** Fix slop-layer hits first, applying the canonical fix for
-   each high-signal rule:
+3. **Revise.** Fix google-layer hits first, since that layer defines the
+   house style. These are the rules that fire most on ordinary prose:
+
+   | Rule ID                    | Fix                                                                                      |
+   | -------------------------- | ---------------------------------------------------------------------------------------- |
+   | `reader-address-person`    | Address the reader as `you`; keep `the user` for the reader's own end users, and drop `we` and `let's` from procedures. |
+   | `passive-by-agent`         | Put the actor in front of the verb, so `X is validated by the server` becomes `The server validates X`. |
+   | `impersonal-recommendation`| Give the advice an owner with `We recommend that you ...`; use `must` for a requirement and `can` for an option. |
+   | `trivializing-difficulty`  | Delete `simply`, `easy`, `just`, `merely`, `quickly`; if effort matters, give a number instead. |
+   | `future-tense-behavior`    | Write the present tense: `the server returns a 200`, never `will return`.                |
+   | `time-bound-qualifier`     | Delete `currently` and `at present`; name the version or the date when the claim is really bound to one. |
+   | `superlative-product-claim`| Replace the superlative with a scoped, sourced comparison, or describe the behavior instead. |
+   | `heading-sentence-case`    | Capitalize the first word and proper nouns only, so `Getting Started With The API` becomes `Get started with the API`. |
+   | `vague-link-text`          | Replace `click here` and `this document` with the destination's title.                   |
+   | `plain-word-swap`          | Use the everyday word: `use`, `start`, `run`, `so`, `before`, `help`.                    |
+   | `multiword-for-single-word`| Collapse the stock phrase, so `has the ability to` becomes `can` and `a number of` becomes `some`. |
+   | `latin-abbreviation`       | Write `that is` for `i.e.` and `for example` for `e.g.`, and finish the list rather than trailing off with `etc.` |
+   | `serial-comma`             | Put a comma before the `and` or `or` introducing the last item.                          |
+
+   Then fix slop-layer hits, applying the canonical fix for each
+   high-signal rule:
 
    | Rule ID                  | Fix                                                                                    |
    | ------------------------ | -------------------------------------------------------------------------------------- |
@@ -106,7 +132,7 @@ root. The wrapper derives its paths from its own location, and
    | `throat-clearing`        | Delete the preamble paragraph entirely and open on the substance.                      |
    | `sycophantic-frame`      | Delete the compliment and answer the question directly instead.                        |
 
-   Then fix base-layer hits, without introducing new slop hits:
+   Then fix base-layer hits, without introducing new google or slop hits:
 
    | Rule ID            | Fix                                                                          |
    | ------------------ | ---------------------------------------------------------------------------- |
@@ -123,9 +149,9 @@ root. The wrapper derives its paths from its own location, and
    when present. For client-side rules, apply the canonical fix from the
    tables above.
 
-4. **Loop.** Re-run `slop-cop check -` on the revised draft, slop layer
-   before base layer each pass, and never trade a base-layer fix for a new
-   slop violation. The two layers leave a wide corridor: `staccato-burst`
+4. **Loop.** Re-run `slop-cop check -` on the revised draft, google layer
+   before slop layer before base layer each pass, and never trade a fix in
+   one layer for a new violation in another. The two layers leave a wide corridor: `staccato-burst`
    fires on a run of three or more sentences of 8 words or fewer, and
    `long-sentence` fires past 40 words, so sentences of 9 to 40 words are
    safe ground. Treat the band as a floor and a ceiling, never as a target

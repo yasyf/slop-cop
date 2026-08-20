@@ -17,6 +17,7 @@ const (
 	CategoryStructural        ViolationCategory = "structural"
 	CategoryFraming           ViolationCategory = "framing"
 	CategoryBase              ViolationCategory = "base"
+	CategoryGoogle            ViolationCategory = "google"
 )
 
 // LLMTier identifies which LLM pass produces a rule's detections.
@@ -43,6 +44,7 @@ type ViolationRule struct {
 	LLMDetectionHint string            `json:"llmDetectionHint,omitempty"`
 	RewriteHint      string            `json:"rewriteHint,omitempty"`
 	LLMDirective     string            `json:"llmDirective,omitempty"`
+	Cite             string            `json:"cite,omitempty"`
 }
 
 // Violation is a single flagged span in a piece of text.

@@ -63,6 +63,19 @@ type Analyzer interface {
 	ApplySuppressions(violations []types.Violation, suppress []Range, original string) []types.Violation
 }
 
+// SuppressedByKind reports whether a violation falls inside a structural kind
+// its own rule declares it must not fire in. The google layer carries those
+// exclusions as data in [GoogleSuppress], so analyzers consult one table
+// instead of growing a switch arm per rule.
+func SuppressedByKind(v types.Violation, spans []Range) bool {
+	for _, kind := range GoogleSuppress[v.RuleID] {
+		if Overlaps(v.StartIndex, v.EndIndex, spans, kind) {
+			return true
+		}
+	}
+	return false
+}
+
 // Overlaps reports whether [vStart, vEnd) overlaps any Range in spans whose
 // Kind matches want. Shared helper for ApplySuppressions implementations.
 func Overlaps(vStart, vEnd int, spans []Range, want Kind) bool {

@@ -127,6 +127,9 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 func (Analyzer) ApplySuppressions(vs []types.Violation, suppress []lang.Range, original string) []types.Violation {
 	out := make([]types.Violation, 0, len(vs))
 	for _, v := range vs {
+		if lang.SuppressedByKind(v, suppress) {
+			continue
+		}
 		switch v.RuleID {
 		case "dramatic-fragment", "long-sentence":
 			if lang.Overlaps(v.StartIndex, v.EndIndex, suppress, lang.KindHeading) {

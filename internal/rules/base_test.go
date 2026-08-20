@@ -16,19 +16,26 @@ func TestRuleCounts(t *testing.T) {
 	if len(Base) != 9 {
 		t.Errorf("len(Base) = %d, want 9", len(Base))
 	}
-	if len(All) != 57 {
-		t.Errorf("len(All) = %d, want 57", len(All))
+	if len(Google) != 169 {
+		t.Errorf("len(Google) = %d, want 169", len(Google))
+	}
+	if len(All) != 226 {
+		t.Errorf("len(All) = %d, want 226", len(All))
 	}
 }
 
 // Slop-first ordering is load-bearing: the LLM prompt numbers rules by
-// position, so appending Base must leave the slop layer's numbering alone.
-func TestAllIsSlopThenBase(t *testing.T) {
+// position, so appending Base and then Google must leave the numbering of
+// every earlier layer alone.
+func TestAllIsSlopThenBaseThenGoogle(t *testing.T) {
 	if !reflect.DeepEqual(All[:len(Slop)], Slop) {
 		t.Fatal("All does not open with Slop in order")
 	}
-	if !reflect.DeepEqual(All[len(Slop):], Base) {
-		t.Fatal("All does not close with Base in order")
+	if !reflect.DeepEqual(All[len(Slop):len(Slop)+len(Base)], Base) {
+		t.Fatal("Base does not follow Slop in order")
+	}
+	if !reflect.DeepEqual(All[len(Slop)+len(Base):], Google) {
+		t.Fatal("All does not close with Google in order")
 	}
 }
 
@@ -106,11 +113,11 @@ func TestLLMTierCounts(t *testing.T) {
 			t.Errorf("%s requires an LLM but names no tier", r.ID)
 		}
 	}
-	if sentence != 11 {
-		t.Errorf("sentence-tier rules = %d, want 11", sentence)
+	if sentence != 40 {
+		t.Errorf("sentence-tier rules = %d, want 40", sentence)
 	}
-	if document != 4 {
-		t.Errorf("document-tier rules = %d, want 4", document)
+	if document != 8 {
+		t.Errorf("document-tier rules = %d, want 8", document)
 	}
 }
 

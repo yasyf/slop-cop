@@ -107,6 +107,50 @@ The standard itself is available free of charge from ASD on request at
 https://asd-ste100.org, under ASD's own terms, which do not permit general
 public redistribution.
 
+Google developer documentation style guide
+------------------------------------------
+
+The rules in the "google" category (slop-cop's google layer) are derived from
+the Google developer documentation style guide:
+
+    Google developer documentation style guide
+    https://developers.google.com/style
+    Copyright Google LLC
+    Licensed under the Creative Commons Attribution 4.0 License
+    https://creativecommons.org/licenses/by/4.0/
+
+That licence permits derivative works with attribution, which this section
+and the per-rule citations below provide.
+
+Rule names, descriptions, and tips in the google layer are original wording
+written for this project, not passages copied from the guide. What is derived
+is the taxonomy: which distinctions the guide draws, and how it rules on each
+one. Every google rule carries the guide page and section it came from in its
+`cite` field; enumerate them with:
+
+    slop-cop rules --category=google
+
+Coverage is deliberately partial in two ways. Guidance that no text linter can
+act on -- image content, file layout, HTML element choice, repository
+structure -- is not implemented. Guidance on inclusive and bias-free
+terminology is not implemented either; that was a scoping decision by this
+project, not a judgement about the guidance, and the guide remains the
+authority for anyone who wants it.
+
+Passing slop-cop's google layer is NOT conformance with the Google developer
+documentation style guide. slop-cop is not affiliated with, endorsed by, or
+certified by Google.
+
+Where the guide and slop-cop's other layers disagree, the guide wins, with one
+carve-out: the "slop" layer's rules flag prose that reads as machine-generated,
+and those stay in force even where the guide permits the construction
+underneath. The guide allows em dashes; slop-cop still flags the em-dash pivot,
+because the tell is the rhetorical move, not the punctuation it rides on. The
+overrides are recorded as data in internal/rules/google.go (Supersedes), and
+each one is scoped to the span the guide's rule actually matched. The guide
+wins the instance it covers, never the rule outright, so a tell silenced on one
+sentence stays live everywhere else in the document.
+
 Third-party Go dependencies
 ---------------------------
 

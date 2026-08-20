@@ -129,6 +129,9 @@ func (a *analyzer) Analyze(src string) (string, []lang.Range, error) {
 func (a *analyzer) ApplySuppressions(vs []types.Violation, suppress []lang.Range, original string) []types.Violation {
 	out := make([]types.Violation, 0, len(vs))
 	for _, v := range vs {
+		if lang.SuppressedByKind(v, suppress) {
+			continue
+		}
 		if v.RuleID == "dramatic-fragment" && lang.Overlaps(v.StartIndex, v.EndIndex, suppress, lang.KindJSDoc) {
 			// JSDoc tag lines ("@param … name - a short phrase") look like
 			// dramatic fragments to the detector; they're not.

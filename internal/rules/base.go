@@ -133,6 +133,6 @@ var Base = []types.ViolationRule{
 }
 
 // All is the canonical ordered list of every rule. Slop first is load-bearing:
-// the LLM prompt numbers rules by position, so appending Base leaves the
-// existing sentence-tier prompt numbering unchanged.
-var All = append(append([]types.ViolationRule{}, Slop...), Base...)
+// the LLM prompt numbers rules by position, so appending Base and then Google
+// leaves the existing sentence-tier prompt numbering unchanged.
+var All = append(append(append([]types.ViolationRule{}, Slop...), Base...), Google...)

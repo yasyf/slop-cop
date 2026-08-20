@@ -99,9 +99,10 @@ func resolveLang(langFlag, path string) (lang.Analyzer, string, error) {
 type standardLayer string
 
 const (
-	standardAll  standardLayer = "all"
-	standardSlop standardLayer = "slop"
-	standardBase standardLayer = "base"
+	standardAll    standardLayer = "all"
+	standardSlop   standardLayer = "slop"
+	standardBase   standardLayer = "base"
+	standardGoogle standardLayer = "google"
 )
 
 // resolveStandard maps --standard onto a layer selection. An unknown value is
@@ -112,11 +113,48 @@ func resolveStandard(standardFlag string) (standardLayer, error) {
 		pick = "all"
 	}
 	switch standardLayer(pick) {
-	case standardAll, standardSlop, standardBase:
+	case standardAll, standardSlop, standardBase, standardGoogle:
 		return standardLayer(pick), nil
 	}
-	return "", fmt.Errorf("invalid --standard value %q (want all|slop|base)", pick)
+	return "", fmt.Errorf("invalid --standard value %q (want all|slop|base|google)", pick)
 }
+
+// dropSuperseded silences a rule on the spans a google rule already ruled on,
+// so a run carrying both layers reports the style guide's verdict once instead
+// of the looser rule's alongside it. Scoping to the overlap keeps the silenced
+// rule live everywhere else in the document.
+func dropSuperseded(vs []types.Violation) []types.Violation {
+	silenced := map[string][]types.Violation{}
+	for _, v := range vs {
+		for _, id := range rules.Supersedes[v.RuleID] {
+			silenced[id] = append(silenced[id], v)
+		}
+	}
+	if len(silenced) == 0 {
+		return vs
+	}
+	out := make([]types.Violation, 0, len(vs))
+	for _, v := range vs {
+		if overlapsAny(v, silenced[v.RuleID]) {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func overlapsAny(v types.Violation, spans []types.Violation) bool {
+	for _, s := range spans {
+		if v.StartIndex < s.EndIndex && s.StartIndex < v.EndIndex {
+			return true
+		}
+	}
+	return false
+}
+
+func (s standardLayer) runsSlop() bool   { return s == standardAll || s == standardSlop }
+func (s standardLayer) runsBase() bool   { return s == standardAll || s == standardBase }
+func (s standardLayer) runsGoogle() bool { return s == standardAll || s == standardGoogle }
 
 // catalogue returns the rules this layer selection puts in front of the LLM
 // passes. Slop first in All is load-bearing: buildRulePrompt numbers rules by
@@ -127,6 +165,8 @@ func (s standardLayer) catalogue() []types.ViolationRule {
 		return rules.Slop
 	case standardBase:
 		return rules.Base
+	case standardGoogle:
+		return rules.Google
 	}
 	return rules.All
 }
@@ -274,7 +314,7 @@ linting just the lines an edit touched:
 	cmd.Flags().DurationVar(&docTO, "document-timeout", llm.DefaultDocumentTimeout, "Timeout for the document pass.")
 	cmd.Flags().StringVar(&langMode, "lang", "auto", "Input language: auto|text|markdown|html|jsx|tsx|ts|js.")
 	cmd.Flags().StringVar(&linesFlag, "lines", "", "Restrict the report to a 1-based inclusive line range, e.g. 50:80 (open-ended 50: or :80; a bare 50 is one line). Detectors still run over the full input.")
-	cmd.Flags().StringVar(&standard, "standard", "all", "Rule layers to run: all (both), slop (the original LLM-tell catalogue), base (the plain-language base layer).")
+	cmd.Flags().StringVar(&standard, "standard", "all", "Rule layers to run: all (every layer), slop (the original LLM-tell catalogue), base (the plain-language base layer), google (the Google developer documentation style guide).")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		std, err := resolveStandard(standard)
@@ -321,11 +361,15 @@ linting just the lines an edit touched:
 		}
 
 		var violations []types.Violation
-		if std != standardBase {
+		if std.runsSlop() {
 			violations = detectors.RunClient(scanText)
 		}
-		if std != standardSlop {
+		if std.runsBase() {
 			violations = append(violations, detectors.RunBase(scanText)...)
+		}
+		if std.runsGoogle() {
+			violations = append(violations, detectors.RunGoogle(scanText)...)
+			violations = dropSuperseded(violations)
 		}
 
 		var llmRep *llmReport
