@@ -49,8 +49,14 @@ func RunSchema(ctx context.Context, cfg Config, system, user string, schema json
 		Dir:           scratch,
 		Timeout:       cfg.Timeout,
 	}
-	if system != "" {
-		spec.Providers.Claude = &spawnllm.ClaudeConfig{SystemPrompt: system}
+	// UseHostConfig also hands claude the host's MCP servers, and it connects to
+	// every one of them before answering — 63s against 1.9s on a workstation with
+	// a handful configured, which is most of a lint pass's budget spent on servers
+	// a detector never calls. An empty config plus StrictMCP starts none of them.
+	spec.Providers.Claude = &spawnllm.ClaudeConfig{
+		SystemPrompt: system,
+		MCPConfig:    `{"mcpServers":{}}`,
+		StrictMCP:    true,
 	}
 
 	resp, err := spawnllm.RunOn(ctx, spawnllm.ClaudeBackend(), spec)
