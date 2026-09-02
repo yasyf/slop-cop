@@ -34,5 +34,9 @@ repos:
   - repo: https://github.com/golangci/golangci-lint
     rev: v2.12.2
     hooks:
+      # prek pins GOTOOLCHAIN=local, so an unpinned hook takes the ambient
+      # `go`. Keep >= the highest go.mod `go` in any consuming repo.
       - id: golangci-lint-fmt
+        language_version: '1.26.6'
       - id: golangci-lint
+        language_version: '1.26.6'
