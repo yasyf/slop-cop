@@ -211,3 +211,28 @@ rate limit, or a timeout, slop-cop skips the auto-enabled pass and reports
 its error; the client-side output always returns. Inspect
 `llm_effort` and `llm.sentence` / `llm.document` in the JSON report to see
 what actually ran.
+
+## Plain-English twins
+
+`slop-cop check` grades one piece of prose. `slop-cop plainify` writes a
+second one: a plain-English twin of text that is precise but hard to read
+cold, such as a register entry, a review finding, or a recorded decision. The
+twin sits beside the original, and the original stays authoritative.
+
+Reach for it whenever the reader sits outside the project. A finding that
+names `DQ4` reads fine to whoever wrote it and not at all to anyone else, and
+the same goes for claudish, the prose an agent writes for other agents.
+Plainify turns both into something a reader follows on one pass.
+
+```bash
+"$SLOP_COP" plainify draft.md --max-words 120 --name-by-title --glossary titles.json
+```
+
+The rewrite keeps every fact, name, number, and file path, and leaves fenced
+and inline code alone. `--max-words` and `--forbid <regex>` reach the model as
+instructions and are graded again once it answers, so
+`--forbid '\b(DQ|A|Q|V)\d+\b'` catches an identifier the rewrite kept. What a
+retry still misses lands in the result's `truncated` and `violations` fields
+instead of being dropped. `--json` reads an array of `{"id","text"}` entries
+and returns one result per entry, in the order they arrived. The
+`/slop-cop-plainify` command runs the same rewrite as a one-off.

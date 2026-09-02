@@ -118,7 +118,7 @@ When the base layer runs over at least 100 words of prose, the report also carri
 
 ## The agent plugin
 
-The [`slop-cop-prose`](skills/slop-cop-prose/SKILL.md) skill triggers whenever you ask the agent to write, revise, or polish prose, and keeps the loop silent; the agent never announces it. A [`/slop-cop-check`](commands/slop-cop-check.md) command runs a one-off report without rewriting anything.
+The [`slop-cop-prose`](skills/slop-cop-prose/SKILL.md) skill triggers whenever you ask the agent to write, revise, or polish prose, and keeps the loop silent; the agent never announces it. A [`/slop-cop-check`](commands/slop-cop-check.md) command runs a one-off report without rewriting anything, and [`/slop-cop-plainify`](commands/slop-cop-plainify.md) rewrites a file into plain English and shows the result beside the original.
 
 <details>
 <summary>Claude Code</summary>
