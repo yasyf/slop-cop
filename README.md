@@ -94,6 +94,7 @@ tree-sitter masks every non-prose byte before detectors run, so hits land only o
 | Command | What it does |
 | --- | --- |
 | `check [path\|-]` | Run detectors; emit the JSON report. |
+| `plainify [path\|-]` | Rewrite prose into plain English with the `claude` CLI, under optional length and vocabulary constraints. |
 | `rewrite [path\|-]` | Rewrite a paragraph via the `claude` CLI, optionally targeting `--rules`. |
 | `rules` | Print the rule catalogue as JSON; filter with `--category` or `--llm-only`. |
 | `version` | Print build metadata as JSON. |
@@ -102,7 +103,11 @@ Input is the positional argument; pass `-` or omit it to read stdin. Run `slop-c
 
 ## How it works
 
-The interface assumes an agent is driving, so slop-cop prints JSON on stdout and diagnostics on stderr, with no TUI, no highlighting, and no prompts. `check` runs the 178 instant client-side rules, regex and structural, then up to two Claude-backed tiers. The sentence tier adds 40 rules on Claude Haiku under `--llm`, the document tier adds 8 more on Claude Sonnet under `--llm-deep`, and the full catalogue is 226 rules. `--llm-effort` is the underlying control, taking `off`, `low`, `high`, or `auto`. The default `auto` resolves to `low` whenever the `claude` CLI is on `$PATH`, so the sentence tier runs and the slower document tier waits for an explicit `--llm-deep`. An auto-enabled pass that fails reports the error in the report's `llm` field while the client-side results still return. The LLM tiers and `rewrite` drive the `claude` CLI, so slop-cop never needs an Anthropic API key; it rides your Claude subscription.
+The interface assumes an agent is driving, so slop-cop prints JSON on stdout and diagnostics on stderr, with no TUI, no highlighting, and no prompts. `check` runs the 178 instant client-side rules, regex and structural, then up to two Claude-backed tiers. The sentence tier adds 40 rules on Claude Haiku under `--llm`, the document tier adds 8 more on Claude Sonnet under `--llm-deep`, and the full catalogue is 226 rules. `--llm-effort` is the underlying control, taking `off`, `low`, `high`, or `auto`. The default `auto` resolves to `low` whenever the `claude` CLI is on `$PATH`, so the sentence tier runs and the slower document tier waits for an explicit `--llm-deep`. An auto-enabled pass that fails reports the error in the report's `llm` field while the client-side results still return. The LLM tiers, `rewrite`, and `plainify` drive the `claude` CLI, so slop-cop never needs an Anthropic API key; it rides your Claude subscription.
+
+`plainify` turns prose written for insiders into prose a reader outside the project can follow on one pass. The contract is fixed. Keep every fact, name, number, and file path, write short sentences in everyday words, and leave fenced and inline code alone. `--max-words` and `--forbid <regex>` reach the model as instructions and are graded again once it answers, so `--forbid '\b(DQ|A|Q|V)\d+\b'` catches the register id the rewrite kept.
+
+A rewrite that misses either constraint is retried once with its misses named, and what the retry still misses lands in the report's `truncated` and `violations` fields instead of being dropped. `--name-by-title` asks for titles in place of identifiers, and `--glossary <file>` hands the model the JSON map from one to the other. `--json` reads an array of `{"id","text"}` entries, runs a call per entry, and returns one result per entry in order.
 
 When the base layer runs over at least 100 words of prose, the report also carries an advisory `readability` object with estimated Flesch reading-ease and grade-level scores. It never produces a violation and never moves the exit code; it is a number to track across revisions, and it disappears under `--standard=slop`.
 

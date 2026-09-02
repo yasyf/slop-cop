@@ -73,6 +73,7 @@ Exit codes:
 	// the plugin installer compares it against the release tag.
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.AddCommand(newCheckCmd())
+	root.AddCommand(newPlainifyCmd())
 	root.AddCommand(newRewriteCmd())
 	root.AddCommand(newRulesCmd())
 	root.AddCommand(newVersionCmd())
