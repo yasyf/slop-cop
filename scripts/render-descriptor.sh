@@ -24,7 +24,9 @@ set -eu
 dist="${1:?usage: render-descriptor.sh <dist-dir> <version>}"
 version="${2:?usage: render-descriptor.sh <dist-dir> <version>}"
 
-here="$(cd "$(dirname "$0")/.." && pwd)"
+# ${0%/*}, not dirname: skips an exec an endpoint-security agent can serialize fleet-wide.
+case "$0" in */*) d=${0%/*} ;; *) d=. ;; esac
+here="$(cd "$d/.." && pwd)"
 tmpl="$here/descriptor/slop-cop.binrun.tmpl"
 checksums="$dist/checksums.txt"
 
