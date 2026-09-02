@@ -52,8 +52,8 @@ github.com/tree-sitter/tree-sitter-rust v0.23.2 h1:6AtoooCW5GqNrRpfnvl0iUhxTAZEo
 github.com/tree-sitter/tree-sitter-rust v0.23.2/go.mod h1:hfeGWic9BAfgTrc7Xf6FaOAguCFJRo3RBbs7QJ6D7MI=
 github.com/tree-sitter/tree-sitter-typescript v0.23.2 h1:/Odvphn18PniVixb9e97X0DbNVsU6Qocv9mfkyzdXwU=
 github.com/tree-sitter/tree-sitter-typescript v0.23.2/go.mod h1:zjzMXT/Ulffel2xfOcAkQQkiAkmgnbtPGlFQw/5X4xA=
-github.com/yasyf/spawnllm/go v0.12.0 h1:9hn7IZyom3o6rmKx+BIAiGQ5Ft+GwkdlEIoM/sYFNbw=
-github.com/yasyf/spawnllm/go v0.12.0/go.mod h1:CDwzU8+zKWO8Bp4Soxtj3ZxQCj+e1BP4te3r4ARayzo=
+github.com/yasyf/spawnllm/go v0.13.0 h1:a1Q9rCAsEssSM/HiJ+87ohlgs9QfPYMuYlckqCem8VE=
+github.com/yasyf/spawnllm/go v0.13.0/go.mod h1:CDwzU8+zKWO8Bp4Soxtj3ZxQCj+e1BP4te3r4ARayzo=
 github.com/yuin/goldmark v1.8.2 h1:kEGpgqJXdgbkhcOgBxkC0X0PmoPG1ZyoZ117rDVp4zE=
 github.com/yuin/goldmark v1.8.2/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
