@@ -7,7 +7,7 @@ require (
 	github.com/tree-sitter/go-tree-sitter v0.25.0
 	github.com/tree-sitter/tree-sitter-javascript v0.25.0
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2
-	github.com/yasyf/spawnllm/go v0.12.0
+	github.com/yasyf/spawnllm/go v0.13.0
 	github.com/yuin/goldmark v1.8.2
 	golang.org/x/net v0.53.0
 )
