@@ -46,6 +46,13 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 	masked := append([]byte(nil), buf...)
 	var suppress []lang.Range
 
+	mask := func(start, end int) {
+		maskSpan(masked, start, end)
+		if end > start {
+			suppress = append(suppress, lang.Range{Start: start, End: end, Kind: lang.KindMasked})
+		}
+	}
+
 	z := html.NewTokenizer(strings.NewReader(src))
 	// Set a generous buffer cap so pathological single-element inputs don't
 	// hit the default 1MB limit mid-parse on real-world HTML dumps.
@@ -67,7 +74,7 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 				break
 			}
 			// Malformed HTML: mask the remainder defensively and stop.
-			maskSpan(masked, start, end)
+			mask(start, end)
 			break
 		}
 
@@ -75,7 +82,7 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 		case html.TextToken:
 			// Keep prose text unless we're inside a raw-text container.
 			if rawDepth > 0 {
-				maskSpan(masked, start, end)
+				mask(start, end)
 				if end > start {
 					suppress = append(suppress, lang.Range{Start: start, End: end, Kind: lang.KindCodeBlock})
 				}
@@ -89,7 +96,7 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 			}
 			// Prose stays visible; no mutation of masked.
 		case html.StartTagToken:
-			maskSpan(masked, start, end)
+			mask(start, end)
 			name, _ := z.TagName()
 			n := strings.ToLower(string(name))
 			if rawTextTags[n] {
@@ -102,7 +109,7 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 				liDepth++
 			}
 		case html.EndTagToken:
-			maskSpan(masked, start, end)
+			mask(start, end)
 			name, _ := z.TagName()
 			n := strings.ToLower(string(name))
 			if rawTextTags[n] && rawDepth > 0 {
@@ -115,7 +122,7 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 				liDepth--
 			}
 		case html.SelfClosingTagToken, html.CommentToken, html.DoctypeToken:
-			maskSpan(masked, start, end)
+			mask(start, end)
 		}
 	}
 
@@ -125,6 +132,7 @@ func (Analyzer) Analyze(src string) (string, []lang.Range, error) {
 // ApplySuppressions drops violations that fall inside suppressed HTML spans
 // (headings, list items) and restores their matched text from the original.
 func (Analyzer) ApplySuppressions(vs []types.Violation, suppress []lang.Range, original string) []types.Violation {
+	vs = lang.DropMaskMatches(vs, suppress, original)
 	out := make([]types.Violation, 0, len(vs))
 	for _, v := range vs {
 		if lang.SuppressedByKind(v, suppress) {
