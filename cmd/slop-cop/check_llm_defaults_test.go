@@ -33,7 +33,15 @@ func TestAutoEnableLLM(t *testing.T) {
 	}
 }
 
-// Tests for resolveEffort. Precedence: --llm-effort > --llm-deep > --llm > auto.
+// clearEffortEnv drops the effort variable the test process may have
+// inherited, so a case states its own conditions.
+func clearEffortEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv(envLLMEffort, "")
+}
+
+// Tests for resolveEffort. Precedence:
+// --llm-effort > --no-llm > --llm-deep > --llm > $SLOP_COP_LLM > auto.
 
 // newCheckForTest builds the check command fresh per test so Flags().Changed
 // reflects only the arguments that particular case set.
@@ -52,54 +60,78 @@ func newCheckForTest(t *testing.T, args []string) *cobra.Command {
 
 // TestResolveEffort exercises the full precedence table. codexOnPath drives
 // whether the auto path picks "low" or "off".
+func callResolveEffort(t *testing.T, cmd *cobra.Command) (llmEffort, bool, error) {
+	t.Helper()
+	effortFlag, _ := cmd.Flags().GetString("llm-effort")
+	llm, _ := cmd.Flags().GetBool("llm")
+	deep, _ := cmd.Flags().GetBool("llm-deep")
+	noLLM, _ := cmd.Flags().GetBool("no-llm")
+	return resolveEffort(cmd, effortFlag, llm, deep, noLLM)
+}
+
 func TestResolveEffort(t *testing.T) {
 	cases := []struct {
 		name        string
 		flags       []string
+		env         string
 		codexOnPath bool
 		wantEff     llmEffort
 		wantAuto    bool
 	}{
 		// Explicit --llm-effort is authoritative.
-		{"effort=off explicit", []string{"--llm-effort=off"}, true, effortOff, false},
-		{"effort=low explicit", []string{"--llm-effort=low"}, true, effortLow, false},
-		{"effort=high explicit", []string{"--llm-effort=high"}, false, effortHigh, false},
-		{"effort=auto with codex", []string{"--llm-effort=auto"}, true, effortLow, true},
-		{"effort=auto without codex", []string{"--llm-effort=auto"}, false, effortOff, true},
+		{"effort=off explicit", []string{"--llm-effort=off"}, "", true, effortOff, false},
+		{"effort=low explicit", []string{"--llm-effort=low"}, "", true, effortLow, false},
+		{"effort=high explicit", []string{"--llm-effort=high"}, "", false, effortHigh, false},
+		{"effort=auto with codex", []string{"--llm-effort=auto"}, "", true, effortLow, true},
+		{"effort=auto without codex", []string{"--llm-effort=auto"}, "", false, effortOff, true},
+
+		// --no-llm alias.
+		{"--no-llm", []string{"--no-llm"}, "", true, effortOff, false},
+		{"--no-llm=false falls through to auto", []string{"--no-llm=false"}, "", true, effortLow, true},
 
 		// --llm-deep alias.
-		{"--llm-deep=true", []string{"--llm-deep"}, false, effortHigh, false},
-		{"--llm-deep=false", []string{"--llm-deep=false"}, true, effortOff, false},
+		{"--llm-deep=true", []string{"--llm-deep"}, "", false, effortHigh, false},
+		{"--llm-deep=false", []string{"--llm-deep=false"}, "", true, effortOff, false},
 
 		// --llm alias.
-		{"--llm=true", []string{"--llm"}, false, effortLow, false},
-		{"--llm=false", []string{"--llm=false"}, true, effortOff, false},
+		{"--llm=true", []string{"--llm"}, "", false, effortLow, false},
+		{"--llm=false", []string{"--llm=false"}, "", true, effortOff, false},
 
 		// --llm-deep wins over --llm when both present.
-		{"--llm + --llm-deep", []string{"--llm", "--llm-deep"}, false, effortHigh, false},
+		{"--llm + --llm-deep", []string{"--llm", "--llm-deep"}, "", false, effortHigh, false},
 
-		// --llm-effort wins over both aliases.
-		{"effort=low + --llm-deep", []string{"--llm-effort=low", "--llm-deep"}, false, effortLow, false},
+		// --no-llm names an outcome, not a tier, so it wins over both.
+		{"--no-llm + --llm-deep", []string{"--no-llm", "--llm-deep"}, "", true, effortOff, false},
+		{"--no-llm + --llm", []string{"--no-llm", "--llm"}, "", true, effortOff, false},
 
-		// No flags → auto.
-		{"default with codex", nil, true, effortLow, true},
-		{"default without codex", nil, false, effortOff, true},
+		// --llm-effort wins over every alias.
+		{"effort=low + --llm-deep", []string{"--llm-effort=low", "--llm-deep"}, "", false, effortLow, false},
+		{"effort=high + --no-llm", []string{"--llm-effort=high", "--no-llm"}, "", false, effortHigh, false},
+
+		// $SLOP_COP_LLM applies when no flag does, and loses to every flag.
+		{"env off", nil, "off", true, effortOff, false},
+		{"env high", nil, "high", false, effortHigh, false},
+		{"env auto with codex", nil, "auto", true, effortLow, true},
+		{"env is case-insensitive", nil, "OFF", true, effortOff, false},
+		{"env empty falls through to auto", nil, "", true, effortLow, true},
+		{"env loses to --llm", []string{"--llm"}, "off", false, effortLow, false},
+		{"env loses to --llm-effort", []string{"--llm-effort=high"}, "off", false, effortHigh, false},
+
+		// No flags, no env → auto.
+		{"default with codex", nil, "", true, effortLow, true},
+		{"default without codex", nil, "", false, effortOff, true},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Setenv(envLLMEffort, c.env)
 			if c.codexOnPath {
 				t.Setenv("PATH", pathWithCodex(t))
 			} else {
 				t.Setenv("PATH", t.TempDir())
 			}
 
-			cmd := newCheckForTest(t, c.flags)
-			effortFlag, _ := cmd.Flags().GetString("llm-effort")
-			llm, _ := cmd.Flags().GetBool("llm")
-			deep, _ := cmd.Flags().GetBool("llm-deep")
-
-			eff, auto, err := resolveEffort(cmd, effortFlag, llm, deep)
+			eff, auto, err := callResolveEffort(t, newCheckForTest(t, c.flags))
 			if err != nil {
 				t.Fatalf("resolveEffort: %v", err)
 			}
@@ -114,9 +146,15 @@ func TestResolveEffort(t *testing.T) {
 }
 
 func TestResolveEffort_InvalidFlag(t *testing.T) {
-	cmd := newCheckForTest(t, []string{"--llm-effort=turbo"})
-	effortFlag, _ := cmd.Flags().GetString("llm-effort")
-	if _, _, err := resolveEffort(cmd, effortFlag, false, false); err == nil {
+	clearEffortEnv(t)
+	if _, _, err := callResolveEffort(t, newCheckForTest(t, []string{"--llm-effort=turbo"})); err == nil {
 		t.Fatalf("expected error for --llm-effort=turbo")
+	}
+}
+
+func TestResolveEffort_InvalidEnv(t *testing.T) {
+	t.Setenv(envLLMEffort, "turbo")
+	if _, _, err := callResolveEffort(t, newCheckForTest(t, nil)); err == nil {
+		t.Fatalf("expected error for %s=turbo", envLLMEffort)
 	}
 }
