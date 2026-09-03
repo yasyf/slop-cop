@@ -3,6 +3,7 @@ package lang_test
 import (
 	"testing"
 
+	"github.com/yasyf/slop-cop/internal/detectors"
 	"github.com/yasyf/slop-cop/internal/lang"
 	"github.com/yasyf/slop-cop/internal/rules"
 	"github.com/yasyf/slop-cop/internal/types"
@@ -38,10 +39,13 @@ func TestDropMaskMatchesDropsFillerOnlyHits(t *testing.T) {
 	}
 }
 
-// TestDeterministicReadsRequiresLLMNotTheTier pins the predicate against the
-// stray tier `false-range` carries: it runs client-side, so the filter must
-// test it like any other detector rule. Keying off LLMTier exempted it.
-func TestDeterministicReadsRequiresLLMNotTheTier(t *testing.T) {
+// TestHitNoDetectorProducedIsKept pins the absence of a false negative: a
+// violation the detectors never made — an LLM pass's — is not in the masked
+// run either, so the filter leaves it alone whatever its rule. `false-range`
+// is the rule that makes this concrete, because it runs client-side while
+// carrying a stray sentence tier, so the LLM pass can report it too and no
+// metadata field separates the two provenances.
+func TestHitNoDetectorProducedIsKept(t *testing.T) {
 	r, ok := rules.ByID["false-range"]
 	if !ok || r.RequiresLLM || r.LLMTier == "" {
 		t.Fatalf("fixture assumption gone: false-range = %+v", r)
@@ -49,7 +53,30 @@ func TestDeterministicReadsRequiresLLMNotTheTier(t *testing.T) {
 	original := "The problem ranges from trivial <!-- an aside --> to catastrophic.\n"
 	spans := []lang.Range{{Start: 32, End: 49, Kind: lang.KindMasked}}
 	vs := []types.Violation{{RuleID: "false-range", StartIndex: 0, EndIndex: 20}}
-	if out := lang.DropMaskMatches(vs, spans, original); len(out) != 0 {
-		t.Fatalf("false-range must be filtered like any client-side rule; got %+v", out)
+	if out := lang.DropMaskMatches(vs, spans, original); len(out) != 1 {
+		t.Fatalf("a hit no detector produced must survive; got %+v", out)
+	}
+}
+
+// TestDetectorHitIsJudgedByItsRuleNotItsMetadata is the companion: real
+// detector hits over the masked text, of which the mask-only parenthetical is
+// dropped and the `false-range` in the surrounding prose is kept. No rule is
+// exempt from the filter and none is falsely dropped by it, so the same rule
+// that survives here as an LLM hit at an unproduced span is still judged on
+// its pattern when a detector actually made it.
+func TestDetectorHitIsJudgedByItsRuleNotItsMetadata(t *testing.T) {
+	original := "The bug (`internal/lang/suppress_data.go`) appeared from nowhere.\n"
+	spans := []lang.Range{{Start: 9, End: 41, Kind: lang.KindMasked}}
+	masked := []byte(original)
+	for i := spans[0].Start; i < spans[0].End; i++ {
+		masked[i] = ' '
+	}
+	vs := detectors.RunClient(string(masked))
+	if len(vs) != 2 {
+		t.Fatalf("fixture should trip parenthetical-qualifier and false-range; got %+v", vs)
+	}
+	out := lang.DropMaskMatches(vs, spans, original)
+	if len(out) != 1 || out[0].RuleID != "false-range" {
+		t.Fatalf("false-range should survive and the masked parenthetical should not; got %+v", out)
 	}
 }
