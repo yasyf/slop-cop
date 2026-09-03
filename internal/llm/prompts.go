@@ -59,15 +59,19 @@ func buildRulePrompt(catalogue []types.ViolationRule, tier types.LLMTier, header
 	return header + "\n\n" + strings.Join(parts, "\n\n") + "\n\n" + footer
 }
 
-// ViolationToolSchema is the JSON schema passed to claude via --json-schema
-// for the detection calls. It mirrors VIOLATION_TOOL_SCHEMA in the TS source.
+// ViolationToolSchema is the JSON schema passed to codex via --output-schema
+// for the detection calls. It mirrors VIOLATION_TOOL_SCHEMA in the TS source,
+// plus the "additionalProperties": false OpenAI structured output rejects the
+// schema without.
 const ViolationToolSchema = `{
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "violations": {
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "ruleId":          {"type": "string"},
           "matchedText":     {"type": "string"},

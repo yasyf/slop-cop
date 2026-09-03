@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	spawnllm "github.com/yasyf/spawnllm/go"
 )
 
 // plainifyConcurrency caps the claude processes one batch runs at once. A
@@ -157,7 +159,7 @@ type plainifyEnvelope struct {
 // rewrite that misses a constraint is retried once with its misses named,
 // and the second attempt's grade is what comes back, met or not.
 func Plainify(ctx context.Context, text string, c PlainifyConstraints, opts Options) (PlainResult, error) {
-	cfg := opts.config(DefaultRewriteModel, DefaultRewriteTimeout)
+	cfg := opts.config(spawnllm.ProviderClaude, DefaultRewriteModel, DefaultRewriteTimeout)
 	system := BuildPlainifySystemPrompt(c)
 
 	plain, err := callPlainify(ctx, cfg, system, text)

@@ -27,7 +27,7 @@ and word lists in the following files are derived from awnist/slop-cop:
     internal/llm/rewrite.go            (src/detectors/llmDetectors.ts)
     internal/detectors/word_patterns_test.go (src/detectors/__tests__/wordPatterns.test.ts)
 
-internal/llm/claude.go (the LLM invocation layer, built on spawnllm) is
+internal/llm/run.go (the LLM invocation layer, built on spawnllm) is
 original to this repository and derives nothing from awnist/slop-cop.
 
 At the time this port was made (April 2026), the awnist/slop-cop repository

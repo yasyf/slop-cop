@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yasyf/slop-cop/internal/rules"
+	spawnllm "github.com/yasyf/spawnllm/go"
 )
 
 // The rewrite model matches rewriteParagraph() in the TS source; the timeout
@@ -64,7 +65,7 @@ type rewriteEnvelope struct {
 // RewriteParagraph sends paragraph through claude with the rewrite system
 // prompt, returning the rewritten text with outer whitespace trimmed.
 func RewriteParagraph(ctx context.Context, paragraph string, violatedRuleHints []string, opts Options) (string, error) {
-	cfg := opts.config(DefaultRewriteModel, DefaultRewriteTimeout)
+	cfg := opts.config(spawnllm.ProviderClaude, DefaultRewriteModel, DefaultRewriteTimeout)
 	var env rewriteEnvelope
 	if err := RunSchema(ctx, cfg, BuildRewriteSystemPrompt(violatedRuleHints), paragraph, json.RawMessage(RewriteSchema), &env); err != nil {
 		return "", err

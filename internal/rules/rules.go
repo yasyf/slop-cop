@@ -633,7 +633,7 @@ var Slop = []types.ViolationRule{
 		LLMDirective:     `Do not use performative honesty phrases ('I\'ll be honest', 'Let\'s be real', 'And yes, since we\'re being honest') — real vulnerability is specific.`,
 	},
 
-	// ── Document-level (Sonnet) ───────────────────────────────────────────────
+	// ── Document-level ───────────────────────────────────────────────────────
 	{
 		ID:               "dead-metaphor",
 		Name:             "Dead Metaphor",
