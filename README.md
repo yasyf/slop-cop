@@ -49,7 +49,7 @@ The agent walks the `violations` array, rewrites each `matchedText`, and re-chec
 
 ### Catch the sentence nobody can parse, whoever typed it
 
-The slop layer polices prose that sounds like an LLM, and the new base layer underneath polices prose that is merely unclear. Its 9 plain-language rules flag the 45-word sentence, the padded `allows you to`, the passive that demotes its actor, and the paragraph carrying three ideas, in human prose and agent prose alike:
+The slop layer polices prose that sounds like an LLM, and the new base layer underneath polices prose that is unclear. Its 9 plain-language rules flag the 45-word sentence, the padded `allows you to`, the passive that demotes its actor, and the paragraph carrying three ideas, in human prose and agent prose alike:
 
 ```bash
 slop-cop check docs/spec.md --standard=base
@@ -72,10 +72,10 @@ Every rule carries the guide section it came from, so `slop-cop rules --category
 Slop merges because nobody wants to be the reviewer who flags tone. Make the machine do it:
 
 ```bash
-slop-cop check docs/announcement.md | jq -e '.violations == []'
+slop-cop check docs/announcement.md --strict
 ```
 
-`check` always exits 0 and puts the verdict in the JSON; `jq -e` turns the empty `violations` array into the pass/fail bit. The 178 client-side rules make no network calls, so the gate costs milliseconds.
+`check` exits 0 whatever it finds and puts the verdict in the JSON; `--strict` turns a non-empty `violations` array into exit 1. The 178 client-side rules make no network calls, so the gate costs milliseconds. Test for the report's `ran` field before trusting an empty result. A run killed by a timeout leaves empty stdout, and without `--strict` its exit code matches a clean pass.
 
 If you gated CI on an earlier slop-only release, this gate now fails on base- and google-layer hits too. Pass `--standard=slop` to reproduce the old gate; its report is byte-identical to what earlier releases printed.
 
@@ -95,15 +95,17 @@ tree-sitter masks every non-prose byte before detectors run, so hits land only o
 | --- | --- |
 | `check [path\|-]` | Run detectors; emit the JSON report. |
 | `plainify [path\|-]` | Rewrite prose into plain English with the `claude` CLI, under optional length and vocabulary constraints. |
-| `rewrite [path\|-]` | Rewrite a paragraph via the `claude` CLI, optionally targeting `--rules`. |
-| `rules` | Print the rule catalogue as JSON; filter with `--category` or `--llm-only`. |
+| `rewrite [path\|-]` | Rewrite a paragraph through the `claude` CLI, optionally targeting `--rules`. |
+| `rules` | Print the rule catalog as JSON; filter with `--category` or `--llm-only`. |
 | `version` | Print build metadata as JSON. |
 
 Input is the positional argument; pass `-` or omit it to read stdin. Run `slop-cop check --help` for the full flag list, or `slop-cop rules --pretty` for the taxonomy of all 226 rules. Exit codes are `0` for success, `2` for an input or IO error, `3` for an LLM subprocess failure, and `4` for a usage error; pass `--strict` to add `1` for a run that found violations.
 
 ## How it works
 
-The interface assumes an agent is driving, so slop-cop prints JSON on stdout and diagnostics on stderr, with no TUI, no highlighting, and no prompts. `check` runs the 178 instant client-side rules, regex and structural, then up to two model-backed tiers. The sentence tier adds 40 rules under `--llm`, the document tier adds 8 more under `--llm-deep`, and the full catalogue is 226 rules. Both tiers run `gpt-5.6-luna` at low reasoning effort. `--llm-effort` is the underlying control, taking `off`, `low`, `high`, or `auto`. The default `auto` resolves to `low` whenever the `codex` CLI is on `$PATH`, so the sentence tier runs and the slower document tier waits for an explicit `--llm-deep`. An auto-enabled pass that fails reports the error in the report's `llm` field while the client-side results still return. The tiers drive the `codex` CLI and `rewrite` and `plainify` drive `claude`, so slop-cop never needs an API key; it rides the logins you already have.
+The interface assumes an agent is driving, so slop-cop prints JSON on stdout and diagnostics on stderr, with no terminal UI, no highlighting, and no prompts. `check` runs the 178 instant client-side rules, regex and structural, then up to two model-backed tiers. The sentence tier adds 40 rules under `--llm`, the document tier adds 8 more under `--llm-deep`, and the full catalog is 226 rules. Both tiers run `gpt-5.6-luna` at low reasoning effort.
+
+`--llm-effort` is the underlying control, taking `off`, `low`, `high`, or `auto`. The default `auto` resolves to `low` whenever the `codex` CLI is on `$PATH`, so the sentence tier runs and the slower document tier waits for an explicit `--llm-deep`. An auto-enabled pass that fails reports the error in the report's `llm` field while the client-side results still return. The tiers drive the `codex` CLI and `rewrite` and `plainify` drive `claude`, so slop-cop never needs an API key; it rides the logins you already have.
 
 `plainify` turns prose written for insiders into prose a reader outside the project can follow on one pass. The contract is fixed. Keep every fact, name, number, and file path, write short sentences in everyday words, and leave fenced and inline code alone. `--max-words` and `--forbid <regex>` reach the model as instructions and are graded again once it answers, so `--forbid '\b(DQ|A|Q|V)\d+\b'` catches the register id the rewrite kept.
 
@@ -115,6 +117,34 @@ When the base layer runs over at least 100 words of prose, the report also carri
 
 > [!WARNING]
 > `startIndex` and `endIndex` are UTF-8 byte offsets. Slicing by UTF-16 code units in JavaScript or Java corrupts the spans; convert first.
+
+## Suppress rules with `.slopcop.toml`
+
+A rule that fires on a construction your house style mandates, such as `colon-elaboration` on a required `Context:` label or `listicle-instinct` on a template's bullet sections, gets switched off once in a file instead of argued with in every session:
+
+```toml
+disable = ["colon-elaboration", "listicle-instinct"]
+
+[[overrides]]
+paths = ["docs/reference/**/*.md"]
+disable = ["parenthetical-qualifier"]
+
+[[overrides]]
+paths = ["CHANGELOG.md"]
+enable_only = ["overused-intensifiers", "era-opener"]
+```
+
+`check` walks up from the input's directory, or from the working directory for stdin, and uses the nearest `.slopcop.toml`; a tree without one runs unfiltered. `--config <file>` names one instead, and then a missing file exits `2`. The report's `config` field names the file that applied.
+
+| Key | Effect |
+| --- | --- |
+| `disable` | Rule IDs removed from the run. |
+| `enable_only` | The only rule IDs that run. `disable` still applies on top. |
+| `[[overrides]]` | A block with `paths` (required) plus its own `disable` and `enable_only`, applied when the input path matches any of its globs. |
+
+Blocks apply in file order. Each matching block's `disable` accumulates with the top-level list; a matching block's `enable_only` replaces the list in force, so the last matching block wins. Globs match the input path relative to the config file's directory. `**` crosses directory separators, `*` and `?` do not, and a pattern without a slash also matches the file's basename at any depth. An input outside the config's tree matches on the path you passed. Stdin has no path, so overrides never apply to it and only the top-level lists do.
+
+A suppressed rule never reaches the LLM passes' prompt. The filter runs before the google layer's supersession, so disabling a google rule hands its span back to the slop rule it outranked. An unknown rule ID, an unknown key, or an override without `paths` is a usage error that exits `4` naming the offender; `slop-cop rules` prints the catalog to pick from.
 
 ## The agent plugin
 
