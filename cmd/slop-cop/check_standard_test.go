@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/yasyf/slop-cop/internal/readability"
 	"github.com/yasyf/slop-cop/internal/rules"
 	"github.com/yasyf/slop-cop/internal/types"
 )
@@ -37,6 +39,17 @@ func runCheck(t *testing.T, args ...string) (string, error) {
 		t.Fatal(err)
 	}
 	return string(out), runErr
+}
+
+// checkOK runs check and fails on anything but a clean run or the
+// violations-found signal, which is not an error.
+func checkOK(t *testing.T, args ...string) string {
+	t.Helper()
+	out, err := runCheck(t, args...)
+	if err != nil && !errors.Is(err, errViolationsFound) {
+		t.Fatalf("check: %v", err)
+	}
+	return out
 }
 
 func decodeReport(t *testing.T, out string) checkReport {
@@ -72,10 +85,7 @@ func TestStandardSlopMatchesPreBaseLayerGoldens(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := runCheck(t, filepath.Join("testdata", c.fixture), "--llm-effort=off", "--standard=slop")
-			if err != nil {
-				t.Fatalf("check: %v", err)
-			}
+			got := legacyProjection(t, checkOK(t, filepath.Join("testdata", c.fixture), "--llm-effort=off", "--standard=slop"))
 			if got != string(want) {
 				t.Fatalf("--standard=slop drifted from %s at %s", c.golden, firstDiff(string(want), got))
 			}
@@ -91,14 +101,8 @@ func TestStandardSlopMatchesPreBaseLayerGoldens(t *testing.T) {
 // own hits survive alongside them.
 func TestStandardDefaultRunsBothLayers(t *testing.T) {
 	fixture := filepath.Join("testdata", "mixed.md")
-	all, err := runCheck(t, fixture, "--llm-effort=off")
-	if err != nil {
-		t.Fatalf("check: %v", err)
-	}
-	slop, err := runCheck(t, fixture, "--llm-effort=off", "--standard=slop")
-	if err != nil {
-		t.Fatalf("check: %v", err)
-	}
+	all := checkOK(t, fixture, "--llm-effort=off")
+	slop := checkOK(t, fixture, "--llm-effort=off", "--standard=slop")
 
 	allRep, slopRep := decodeReport(t, all), decodeReport(t, slop)
 	baseIDs := ruleIDs(rules.Base)
@@ -125,11 +129,7 @@ func TestStandardDefaultRunsBothLayers(t *testing.T) {
 // counts_by_category, which is how an agent tells the two layers apart in a
 // single report.
 func TestStandardDefaultCountsCategoryBase(t *testing.T) {
-	out, err := runCheck(t, filepath.Join("testdata", "mixed.md"), "--llm-effort=off")
-	if err != nil {
-		t.Fatalf("check: %v", err)
-	}
-	rep := decodeReport(t, out)
+	rep := decodeReport(t, checkOK(t, filepath.Join("testdata", "mixed.md"), "--llm-effort=off"))
 	if rep.CountsByCategory[types.CategoryBase] == 0 {
 		t.Fatalf("counts_by_category has no base key: %v", rep.CountsByCategory)
 	}
@@ -142,10 +142,7 @@ func TestStandardDefaultCountsCategoryBase(t *testing.T) {
 func TestStandardBaseEmitsNoSlopOnlyRules(t *testing.T) {
 	for _, fixture := range []string{"mixed.md", "readme.md", "skill.md"} {
 		t.Run(fixture, func(t *testing.T) {
-			out, err := runCheck(t, filepath.Join("testdata", fixture), "--llm-effort=off", "--standard=base")
-			if err != nil {
-				t.Fatalf("check: %v", err)
-			}
+			out := checkOK(t, filepath.Join("testdata", fixture), "--llm-effort=off", "--standard=base")
 			allowed := ruleIDs(rules.Base)
 			allowed["elevated-register"] = true
 			for id := range decodeReport(t, out).CountsByRule {
@@ -239,6 +236,40 @@ func window(s string, at int) string {
 	lo := max(at-60, 0)
 	hi := min(at+120, len(s))
 	return s[lo:hi]
+}
+
+// legacyProjection re-encodes a report as the pre-google envelope the goldens
+// pin, so the gate keeps grading violations, offsets, and counts while the
+// envelope around them grows new fields.
+func legacyProjection(t *testing.T, out string) string {
+	t.Helper()
+	rep := decodeReport(t, out)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(legacyReport{
+		TextLength:       rep.TextLength,
+		Violations:       rep.Violations,
+		CountsByRule:     rep.CountsByRule,
+		CountsByCategory: rep.CountsByCategory,
+		Lang:             rep.Lang,
+		LLMEffort:        rep.LLMEffort,
+		Readability:      rep.Readability,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return buf.String()
+}
+
+// legacyReport is the checkReport shape the goldens were captured from.
+type legacyReport struct {
+	TextLength       int                             `json:"text_length"`
+	Violations       []types.Violation               `json:"violations"`
+	CountsByRule     map[string]int                  `json:"counts_by_rule"`
+	CountsByCategory map[types.ViolationCategory]int `json:"counts_by_category"`
+	Lang             string                          `json:"lang"`
+	LLMEffort        string                          `json:"llm_effort"`
+	Readability      *readability.Report             `json:"readability,omitempty"`
 }
 
 func ruleIDs(rs []types.ViolationRule) map[string]bool {

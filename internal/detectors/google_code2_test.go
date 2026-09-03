@@ -30,6 +30,8 @@ func TestDetectGoogleUnformattedCodeIdentifier(t *testing.T) {
 		{"documentation filenames in prose", "Read AGENTS.md and CLAUDE.md before you start.", false},
 		{"notice file in prose", "Provenance and compliance guidance live in NOTICE.", false},
 		{"allowlisted proper nouns", "Use JavaScript and TypeScript on GitHub with macOS and iOS.", false},
+		{"binary unit abbreviations", "The cache filled to 12.3 GiB after 500 MiB of 4 KiB blocks, on a 2 TiB disk.", false},
+		{"decimal unit abbreviation", "The payload compresses to 900 kB on the wire.", false},
 		{"bare number without status context", "The team reviewed 404 support tickets last quarter.", false},
 		{"caps verb without http context", "Click DELETE to remove the row from the table.", false},
 		{"ordinary prose", "The server returns a response as soon as the upload finishes.", false},
