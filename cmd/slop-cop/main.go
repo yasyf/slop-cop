@@ -13,11 +13,17 @@ import (
 
 // exit codes
 const (
-	exitOK    = 0
-	exitIO    = 2
-	exitLLM   = 3
-	exitUsage = 4
+	exitOK         = 0
+	exitViolations = 1
+	exitIO         = 2
+	exitLLM        = 3
+	exitUsage      = 4
 )
+
+// errViolationsFound signals a completed check whose report carries at least
+// one violation. Only --strict raises it; the report on stdout is the message,
+// so main exits on it without writing a diagnostic.
+var errViolationsFound = errors.New("violations found")
 
 // usageError wraps a flag/argument validation problem so we can map it to
 // exit code 4 at the top level.
@@ -36,18 +42,28 @@ func main() {
 	cmd := newRoot()
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
-	if err := cmd.Execute(); err != nil {
+	err := cmd.Execute()
+	if err != nil && !errors.Is(err, errViolationsFound) {
 		fmt.Fprintln(os.Stderr, "slop-cop:", err)
-		switch {
-		case errors.As(err, new(usageError)):
-			os.Exit(exitUsage)
-		case errors.As(err, new(llmError)):
-			os.Exit(exitLLM)
-		default:
-			os.Exit(exitIO)
-		}
 	}
-	os.Exit(exitOK)
+	os.Exit(exitCodeFor(err))
+}
+
+// exitCodeFor maps a command's terminating error onto the documented exit
+// codes. errViolationsFound is a completed run, not a failure.
+func exitCodeFor(err error) int {
+	switch {
+	case err == nil:
+		return exitOK
+	case errors.Is(err, errViolationsFound):
+		return exitViolations
+	case errors.As(err, new(usageError)):
+		return exitUsage
+	case errors.As(err, new(llmError)):
+		return exitLLM
+	default:
+		return exitIO
+	}
 }
 
 func newRoot() *cobra.Command {
@@ -64,7 +80,8 @@ Input is read from the file argument or from stdin when the argument is "-"
 or omitted. Output is JSON on stdout; errors go to stderr.
 
 Exit codes:
-  0  success (including "no violations found")
+  0  success, including a run that found violations
+  1  check --strict completed and the report carries violations
   2  input/IO error
   3  LLM subprocess error
   4  flag/usage error`,

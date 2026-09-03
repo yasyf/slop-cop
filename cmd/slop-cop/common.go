@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/yasyf/slop-cop/internal/types"
@@ -34,6 +36,36 @@ func addPrettyFlag(cmd *cobra.Command) *bool {
 	var pretty bool
 	cmd.Flags().BoolVar(&pretty, "pretty", false, "Indent JSON output.")
 	return &pretty
+}
+
+// outputFormat is the rendering `check` uses for its report.
+type outputFormat string
+
+const (
+	formatJSON    outputFormat = "json"
+	formatCompact outputFormat = "compact"
+)
+
+// addFormatFlag wires the shared --format flag onto cmd and returns a
+// pointer the caller can read from RunE.
+func addFormatFlag(cmd *cobra.Command) *string {
+	var format string
+	cmd.Flags().StringVar(&format, "format", string(formatJSON), "Output format: json (the full report) or compact (one tab-separated line per violation, then a counts line).")
+	return &format
+}
+
+// resolveFormat maps --format onto a rendering. An unknown value is a usage
+// error.
+func resolveFormat(formatFlag string) (outputFormat, error) {
+	pick := outputFormat(strings.ToLower(formatFlag))
+	if pick == "" {
+		return formatJSON, nil
+	}
+	switch pick {
+	case formatJSON, formatCompact:
+		return pick, nil
+	}
+	return "", fmt.Errorf("invalid --format value %q (want json|compact)", formatFlag)
 }
 
 // sortViolations orders violations deterministically by (start, end, rule)
