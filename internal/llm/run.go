@@ -90,10 +90,10 @@ func RunSchema(ctx context.Context, cfg Config, system, user string, schema json
 		if errors.Is(err, context.DeadlineExceeded) {
 			return context.Cause(runCtx)
 		}
-		return err
+		return cappedError(err)
 	}
 	if resp.Err != nil {
-		return resp.Err
+		return cappedError(resp.Err)
 	}
 
 	// RunOn resolves the schema payload to Result.Raw: the CLI's terminal
@@ -102,6 +102,21 @@ func RunSchema(ctx context.Context, cfg Config, system, user string, schema json
 		return fmt.Errorf("llm: decoding result (%w): %s", err, truncate(resp.Result.Raw, 400))
 	}
 	return nil
+}
+
+// providerErrorLimit caps a provider CLI's error text. A non-zero exit echoes
+// the rules prompt back, burying the exit code under hundreds of characters of
+// prompt an operator then stops reading.
+const providerErrorLimit = 200
+
+// cappedError trims a provider error to its scannable head, which is where the
+// CLI puts its name and exit code.
+func cappedError(err error) error {
+	msg := err.Error()
+	if len(msg) <= providerErrorLimit {
+		return err
+	}
+	return errors.New(truncate(msg, providerErrorLimit))
 }
 
 func truncate(s string, n int) string {
