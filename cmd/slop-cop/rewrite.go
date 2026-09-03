@@ -35,7 +35,7 @@ JSON document containing the rewritten text.`,
 	pretty := addPrettyFlag(cmd)
 	cmd.Flags().StringSliceVar(&ruleList, "rules", nil, "Comma-separated rule IDs whose rewrite hints should be added to the prompt.")
 	cmd.Flags().StringVar(&model, "model", llm.DefaultRewriteModel, "Claude model slug for the rewrite call.")
-	cmd.Flags().DurationVar(&timeout, "timeout", llm.DefaultRewriteTimeout, "Timeout for the rewrite call.")
+	cmd.Flags().DurationVar(&timeout, "timeout", llm.DefaultRewriteTimeout, "Wall-clock bound on the rewrite call, retries included.")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		text, err := readInput(pathArg(args))

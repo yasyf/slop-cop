@@ -67,7 +67,7 @@ they arrived.`,
 	cmd.Flags().BoolVar(&nameByTitle, "name-by-title", false, "Name referenced items by their titles rather than their identifiers.")
 	cmd.Flags().StringVar(&glossary, "glossary", "", `Path to a JSON object mapping identifier to title, e.g. {"DQ4":"Worker transport"}.`)
 	cmd.Flags().StringVar(&model, "model", llm.DefaultRewriteModel, "Claude model slug for the plainify call.")
-	cmd.Flags().DurationVar(&timeout, "timeout", llm.DefaultRewriteTimeout, "Timeout for each plainify call.")
+	cmd.Flags().DurationVar(&timeout, "timeout", llm.DefaultRewriteTimeout, "Wall-clock bound on each plainify call, retries included.")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		text, err := readInput(pathArg(args))
