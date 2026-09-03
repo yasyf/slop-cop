@@ -1,7 +1,7 @@
 {
   "name": "slop-cop",
   "displayName": "Slop Cop",
-  "version": "0.1.67",
+  "version": "0.1.68",
   "description": "Detect and fix LLM-generated prose tells and plain-language clarity problems via the slop-cop CLI.",
   "author": {
     "name": "Yasyf Mohamedali"
