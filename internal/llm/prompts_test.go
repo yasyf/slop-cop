@@ -139,18 +139,11 @@ func TestBasePromptCarriesOnlyBaseRules(t *testing.T) {
 // prompt codex is fed, not merely be dropped from the response. spawnllm
 // delivers the prompt on stdin, so that is what the stand-in captures.
 func TestOptionsRulesReachTheProcess(t *testing.T) {
-	response := writeResponse(t, `{"violations":[]}`)
 	capture := filepath.Join(t.TempDir(), "stdin")
-	dir := t.TempDir()
-	script := fmt.Sprintf(
-		"#!/bin/sh\n/bin/cat > %q\nwhile [ $# -gt 0 ]; do\n\tif [ \"$1\" = -o ]; then exec /bin/cat %q >\"$2\"; fi\n\tshift\ndone\n",
-		capture, response,
-	)
-	//nolint:gosec // G306: an executable stub on a test-owned temp PATH.
-	if err := os.WriteFile(filepath.Join(dir, "codex"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir)
+	writeStub(t, "codex", fmt.Sprintf(
+		"while IFS= read -r line || [ -n \"$line\" ]; do printf '%%s\\n' \"$line\"; done > %q\n%s",
+		capture, codexWriteResult(`{"violations":[]}`),
+	))
 
 	if _, err := RunSentence(context.Background(), "Some prose to analyse.", Options{
 		Timeout: 30 * time.Second,
