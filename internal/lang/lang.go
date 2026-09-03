@@ -22,6 +22,8 @@ const (
 	KindHeading Kind = "heading"
 	// KindListItem covers a single ordered/unordered list item.
 	KindListItem Kind = "list-item"
+	// KindTableCell covers the body of one GFM table cell, header or data.
+	KindTableCell Kind = "table-cell"
 	// KindCodeBlock covers fenced/indented code in markdown or
 	// <pre>/<code>/<script>/<style> in HTML. Usually redundant with masking
 	// but kept so kind-based filters stay symmetric across languages.
@@ -34,6 +36,11 @@ const (
 	KindStringLiteral Kind = "string-literal"
 	// KindJSXText covers text children between JSX opening and closing tags.
 	KindJSXText Kind = "jsx-text"
+	// KindMasked covers every byte the analyzer overwrote with spaces. Unlike
+	// the other kinds it describes the mask itself rather than a structure in
+	// the source, and [DropMaskMatches] uses it to tell filler apart from
+	// prose when re-checking a violation.
+	KindMasked Kind = "masked"
 )
 
 // Range is a half-open byte span [Start, End) into the original source,
@@ -64,11 +71,11 @@ type Analyzer interface {
 }
 
 // SuppressedByKind reports whether a violation falls inside a structural kind
-// its own rule declares it must not fire in. The google layer carries those
-// exclusions as data in [GoogleSuppress], so analyzers consult one table
-// instead of growing a switch arm per rule.
+// its own rule declares it must not fire in. Rules carry those exclusions as
+// data in [Suppress], so analyzers consult one table instead of growing a
+// switch arm per rule.
 func SuppressedByKind(v types.Violation, spans []Range) bool {
-	for _, kind := range GoogleSuppress[v.RuleID] {
+	for _, kind := range Suppress[v.RuleID] {
 		if Overlaps(v.StartIndex, v.EndIndex, spans, kind) {
 			return true
 		}

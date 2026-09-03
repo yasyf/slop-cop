@@ -1,9 +1,9 @@
 package lang
 
-// GoogleSuppress names the structural kinds each google rule must not fire
-// inside. Rules carry their own exclusions as data because the layer is large;
-// a per-rule switch in every analyzer would not survive its size.
-var GoogleSuppress = map[string][]Kind{
+// Suppress names the structural kinds each rule must not fire inside. Rules
+// carry their own exclusions as data because the google layer is large; a
+// per-rule switch in every analyzer would not survive its size.
+var Suppress = map[string][]Kind{
 	"abbreviation-before-expansion":    {KindCodeBlock, KindStringLiteral},
 	"acronym-periods":                  {KindCodeBlock, KindJSDoc, KindStringLiteral},
 	"adjacent-numerals":                {KindCodeBlock, KindStringLiteral},
@@ -29,6 +29,7 @@ var GoogleSuppress = map[string][]Kind{
 	"buried-parenthetical":             {KindCodeBlock, KindStringLiteral},
 	"capitalized-feature-name":         {KindCodeBlock, KindHeading, KindStringLiteral},
 	"checkbox-verb":                    {KindCodeBlock, KindStringLiteral},
+	"colon-elaboration":                {KindCodeBlock, KindHeading, KindListItem, KindStringLiteral},
 	"colon-intro-fragment":             {KindCodeBlock, KindHeading, KindStringLiteral},
 	"comma-before-because":             {KindCodeBlock, KindStringLiteral},
 	"compound-predicate-comma":         {KindCodeBlock, KindStringLiteral},
@@ -46,6 +47,7 @@ var GoogleSuppress = map[string][]Kind{
 	"dropped-article":                  {KindCodeBlock, KindStringLiteral},
 	"duplicate-link-target":            {KindCodeBlock, KindStringLiteral},
 	"ellipsis-in-prose":                {KindCodeBlock, KindStringLiteral},
+	"em-dash-pivot":                    {KindCodeBlock, KindHeading, KindListItem, KindStringLiteral},
 	"exclamation-point":                {KindCodeBlock, KindJSDoc, KindStringLiteral},
 	"expansion-number-mismatch":        {KindCodeBlock, KindStringLiteral},
 	"expansion-title-case":             {KindCodeBlock, KindHeading, KindStringLiteral},
@@ -80,7 +82,7 @@ var GoogleSuppress = map[string][]Kind{
 	"long-parenthetical":               {KindCodeBlock, KindJSDoc, KindStringLiteral},
 	"ly-adverb-hyphen":                 {KindCodeBlock, KindStringLiteral},
 	"misplaced-only":                   {KindCodeBlock, KindStringLiteral},
-	"missing-terminal-period":          {KindCodeBlock, KindHeading, KindJSXText, KindListItem, KindStringLiteral},
+	"missing-terminal-period":          {KindCodeBlock, KindHeading, KindJSXText, KindListItem, KindStringLiteral, KindTableCell},
 	"month-year-comma":                 {KindCodeBlock, KindStringLiteral},
 	"multi-action-step":                {KindCodeBlock},
 	"multiword-for-single-word":        {KindCodeBlock, KindStringLiteral},
@@ -106,6 +108,7 @@ var GoogleSuppress = map[string][]Kind{
 	"overly-informal-register":         {KindCodeBlock, KindStringLiteral},
 	"parenthetical-acronym-possessive": {KindCodeBlock, KindStringLiteral},
 	"parenthetical-period-placement":   {KindCodeBlock, KindStringLiteral},
+	"parenthetical-qualifier":          {KindCodeBlock, KindHeading, KindListItem, KindStringLiteral},
 	"passive-by-agent":                 {KindCodeBlock, KindStringLiteral},
 	"per-outside-rates":                {KindCodeBlock, KindHeading, KindStringLiteral},
 	"percent-format":                   {KindCodeBlock, KindStringLiteral},
@@ -129,7 +132,7 @@ var GoogleSuppress = map[string][]Kind{
 	"repeated-procedure":               {KindCodeBlock, KindStringLiteral},
 	"run-the-following-command":        {KindCodeBlock, KindStringLiteral},
 	"sentence-initial-numeral":         {KindCodeBlock, KindStringLiteral},
-	"serial-comma":                     {KindCodeBlock, KindHeading, KindStringLiteral},
+	"serial-comma":                     {KindCodeBlock, KindHeading, KindStringLiteral, KindTableCell},
 	"sibilant-abbreviation-plural":     {KindCodeBlock, KindStringLiteral},
 	"single-item-list":                 {KindCodeBlock},
 	"single-quotes-in-prose":           {KindCodeBlock, KindJSXText, KindStringLiteral},
