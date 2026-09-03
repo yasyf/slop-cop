@@ -7,6 +7,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -20,7 +21,8 @@ type Config struct {
 	Provider spawnllm.Provider
 	// Model is a literal provider model id, e.g. gpt-5.6-luna:low.
 	Model string
-	// Timeout bounds each attempt; zero picks spawnllm's 180s default.
+	// Timeout is the wall-clock bound on the whole call: the attempt, plus
+	// every retry and backoff sleep spawnllm adds after it.
 	Timeout time.Duration
 }
 
@@ -29,7 +31,7 @@ type Config struct {
 // string replaces the CLI's default system prompt — appending instead leaves
 // the interactive-agent framing in place, and the model answers as a coding
 // session rather than performing the task. Transient provider failures retry
-// with backoff inside spawnllm; ctx bounds the whole call across attempts.
+// with backoff inside spawnllm, and cfg.Timeout bounds the lot.
 func RunSchema(ctx context.Context, cfg Config, system, user string, schema json.RawMessage, out any) error {
 	// UseHostConfig keeps the user's credentials reachable; spawnllm's isolated
 	// mode seeds them from account.json/credentials.json, neither of which
@@ -75,8 +77,19 @@ func RunSchema(ctx context.Context, cfg Config, system, user string, schema json
 		panic(fmt.Sprintf("llm: unsupported provider %q", cfg.Provider))
 	}
 
-	resp, err := spawnllm.RunOn(ctx, backend, spec)
+	// RunSpec.Timeout bounds one attempt, and RunOn retries a transient
+	// failure up to five times with backoff, so the per-attempt bound alone
+	// lets a rate-limited provider run many times its own length. The
+	// context is spawnllm's only bound on the whole retry loop.
+	runCtx, cancel := context.WithTimeoutCause(ctx, cfg.Timeout,
+		fmt.Errorf("%s timed out after %s including retries", cfg.Provider, cfg.Timeout))
+	defer cancel()
+
+	resp, err := spawnllm.RunOn(runCtx, backend, spec)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return context.Cause(runCtx)
+		}
 		return err
 	}
 	if resp.Err != nil {

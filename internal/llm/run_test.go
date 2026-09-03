@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,5 +122,44 @@ func TestRunSentenceResolvesByteOffsets(t *testing.T) {
 	}
 	if v.StartIndex != wantStart || v.EndIndex != wantEnd {
 		t.Fatalf("offsets=[%d,%d], want [%d,%d]", v.StartIndex, v.EndIndex, wantStart, wantEnd)
+	}
+}
+
+// fakeRetryableCodex puts an executable named codex on an otherwise-empty
+// $PATH that works for delay, then fails with an error spawnllm classifies as
+// transient — the input that drives its retry-with-backoff loop.
+func fakeRetryableCodex(t *testing.T, delay time.Duration) {
+	t.Helper()
+	dir := t.TempDir()
+	script := fmt.Sprintf("#!/bin/sh\nsleep %.2f\necho 'rate limit exceeded' >&2\nexit 1\n", delay.Seconds())
+	//nolint:gosec // G306: an executable stub on a test-owned temp PATH.
+	if err := os.WriteFile(filepath.Join(dir, "codex"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake codex: %v", err)
+	}
+	t.Setenv("PATH", dir)
+}
+
+// TestRunSchemaBoundsTheRetryLoop pins Config.Timeout as a bound on the whole
+// call rather than on one attempt. The stub fails well inside the per-attempt
+// bound and retryably, so spawnllm retries it up to five times with backoff;
+// while only RunSpec.Timeout carried the budget, that made a
+// --sentence-timeout=20s run against a rate-limited codex measure 150s.
+func TestRunSchemaBoundsTheRetryLoop(t *testing.T) {
+	fakeRetryableCodex(t, 200*time.Millisecond)
+
+	cfg := Config{Provider: spawnllm.ProviderCodex, Model: DefaultSentenceModel, Timeout: 3 * time.Second}
+	var env violationsEnvelope
+	start := time.Now()
+	err := RunSchema(context.Background(), cfg, SentenceSystemPrompt, "text", json.RawMessage(ViolationToolSchema), &env)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("a provider that always fails must return an error")
+	}
+	if !strings.Contains(err.Error(), "timed out after 3s including retries") {
+		t.Fatalf("error %q is not the exhausted whole-call budget", err)
+	}
+	if elapsed > 30*time.Second {
+		t.Fatalf("call took %s against a %s budget: the retry loop is unbounded", elapsed, cfg.Timeout)
 	}
 }
