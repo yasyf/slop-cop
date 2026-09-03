@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yasyf/slop-cop/internal/detectors"
 	"github.com/yasyf/slop-cop/internal/htmllang"
 	"github.com/yasyf/slop-cop/internal/lang"
 	"github.com/yasyf/slop-cop/internal/types"
@@ -124,17 +125,21 @@ func TestApplySuppressionsDropsLongParagraphAcrossListItems(t *testing.T) {
 
 // TestApplySuppressionsKeepsLengthRulesInProse is the narrowness proof: the
 // document carries a heading and a list, so both suppression ranges are
-// live, yet length hits on a paragraph touching neither still stand.
+// live, yet length hits on a paragraph touching neither still stand. The
+// violations come from the base detectors rather than by hand, so the spans
+// are the ones the pipeline really produces.
 func TestApplySuppressionsKeepsLengthRulesInProse(t *testing.T) {
-	prose := "The build runs first. The tests run next. The linter follows after that. " +
-		"The report lands last. None of this is a list. None of this is a heading. " +
-		"The paragraph simply sprawls onward. That is the rule's whole point."
-	src := "<h1>Pipeline</h1><ul><li>one</li><li>two</li></ul><p>" + prose + "</p>"
-	_, suppress, _ := htmllang.Analyzer{}.Analyze(src)
-	start := strings.Index(src, prose)
-	vs := []types.Violation{
-		{RuleID: "long-sentence", StartIndex: start, EndIndex: start + len(prose)},
-		{RuleID: "long-paragraph", StartIndex: start, EndIndex: start + len(prose)},
+	prose := "The build runs first and then the tests run next and after that the linter " +
+		"follows along behind them while the report lands last and none of this is a list " +
+		"and none of this is a heading and the paragraph simply sprawls onward, which is " +
+		"the whole point of it. The tests run next. The linter follows after that. The " +
+		"report lands last. None of this is a list. None of this is a heading. The " +
+		"paragraph simply sprawls onward. That is the rule's whole point."
+	src := "<h1>Pipeline</h1>\n<ul><li>one</li><li>two</li></ul>\n\n<p>" + prose + "</p>\n"
+	masked, suppress, _ := htmllang.Analyzer{}.Analyze(src)
+	vs := detectors.RunBase(masked)
+	if len(vs) != 2 {
+		t.Fatalf("fixture should trip long-sentence and long-paragraph; got %+v", vs)
 	}
 	out := htmllang.Analyzer{}.ApplySuppressions(vs, suppress, src)
 	if len(out) != 2 {

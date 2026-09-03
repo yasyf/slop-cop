@@ -22,6 +22,8 @@ import (
 	"github.com/yasyf/slop-cop/internal/lang"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -32,6 +34,8 @@ const (
 	KindHeading   = lang.KindHeading
 	KindListItem  = lang.KindListItem
 	KindCodeBlock = lang.KindCodeBlock
+	KindTableCell = lang.KindTableCell
+	KindMasked    = lang.KindMasked
 )
 
 // Range is a half-open byte span [Start, End) into the source — the
@@ -42,6 +46,11 @@ type Range = lang.Range
 // frontMatterRe matches a leading YAML front matter block (`---` fenced).
 // Non-greedy body, optional trailing newline after the closing fence.
 var frontMatterRe = regexp.MustCompile(`(?s)\A---\r?\n.*?\r?\n---[ \t]*(\r?\n|\z)`)
+
+// parser carries the GFM table extension so table cells reach the walker as
+// east.TableCell instead of being scanned as ordinary prose, where sentence
+// grammar rules fire on every tabular fragment.
+var parser = goldmark.New(goldmark.WithExtensions(extension.Table)).Parser()
 
 // Analyze parses src as CommonMark and returns the masked string, the list of
 // structural suppress ranges (sorted by Start then End), and the byte range
@@ -67,10 +76,11 @@ func Analyze(src string) (masked string, suppress []Range, frontMatter Range) {
 		frontMatter = Range{Start: loc[0], End: loc[1]}
 		maskSpan(buf, loc[0], loc[1])
 		maskSpan(parseBuf, loc[0], loc[1])
+		suppress = append(suppress, Range{Start: loc[0], End: loc[1], Kind: KindMasked})
 	}
 
 	reader := text.NewReader(parseBuf)
-	doc := goldmark.DefaultParser().Parse(reader)
+	doc := parser.Parse(reader)
 
 	var masks []Range
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -132,12 +142,19 @@ func Analyze(src string) (masked string, suppress []Range, frontMatter Range) {
 			if r, ok := listItemRange(node, parseBuf); ok {
 				suppress = append(suppress, Range{Start: r.Start, End: r.End, Kind: KindListItem})
 			}
+		case *east.TableCell:
+			if r, ok := blockLinesRange(node); ok {
+				suppress = append(suppress, Range{Start: r.Start, End: r.End, Kind: KindTableCell})
+			}
 		}
 		return ast.WalkContinue, nil
 	})
 
 	for _, r := range masks {
 		maskSpan(buf, r.Start, r.End)
+		if r.End > r.Start {
+			suppress = append(suppress, Range{Start: r.Start, End: r.End, Kind: KindMasked})
+		}
 	}
 
 	sort.Slice(suppress, func(i, j int) bool {
