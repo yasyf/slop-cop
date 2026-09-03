@@ -99,6 +99,12 @@ var code2properNouns = code2lowerSet([]string{
 	"Backbone.js", "Chart.js", "Three.js", "Express.js", "Alpine.js", "D3.js",
 })
 
+// code2unitAbbrevs are byte-size units whose mixed case is the unit's own
+// spelling, not camel case dragged out of source.
+var code2unitAbbrevs = code2lowerSet([]string{
+	"KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB", "kB",
+})
+
 func code2lowerSet(words []string) map[string]bool {
 	out := make(map[string]bool, len(words))
 	for _, w := range words {
@@ -191,7 +197,8 @@ func DetectGoogleUnformattedCodeIdentifier(text string) []types.Violation {
 
 func code2appendIdent(out []types.Violation, text string, start, end int) []types.Violation {
 	matched := text[start:end]
-	if code2properNouns[strings.ToLower(matched)] {
+	lowered := strings.ToLower(matched)
+	if code2properNouns[lowered] || code2unitAbbrevs[lowered] {
 		return out
 	}
 	return append(out, types.Violation{

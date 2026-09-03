@@ -23,6 +23,16 @@ import (
 // checkReport is the JSON document emitted by `slop-cop check`. Counts are
 // denormalised so callers don't have to walk the violations slice.
 type checkReport struct {
+	// Ran is always true. A consumer tests for the field's presence: a
+	// killed or truncated run leaves output that cannot decode into a
+	// report claiming it ran, so empty stdout never reads as a clean pass.
+	Ran bool `json:"ran"`
+	// Version and BinaryPath identify the build that produced the report,
+	// so a rule-ID mismatch resolves against the binary on disk. Both keys
+	// are always emitted; either value is empty when undeterminable, which
+	// is not a signal about the run. Ran is.
+	Version          string                          `json:"version"`
+	BinaryPath       string                          `json:"binary_path"`
 	TextLength       int                             `json:"text_length"`
 	Violations       []types.Violation               `json:"violations"`
 	CountsByRule     map[string]int                  `json:"counts_by_rule"`
@@ -42,6 +52,20 @@ type checkReport struct {
 	// filter it. Omitted when the base layer is off or the prose is too
 	// short to score.
 	Readability *readability.Report `json:"readability,omitempty"`
+	// Rules carries the fix guidance for each rule that fired, once per
+	// distinct rule ID rather than once per violation.
+	Rules map[string]reportRule `json:"rules,omitempty"`
+	// Config names the .slopcop.toml that filtered this run. Omitted when
+	// no config applied.
+	Config string `json:"config,omitempty"`
+}
+
+// reportRule is the fix guidance sidecar for one rule that fired.
+type reportRule struct {
+	Name        string                  `json:"name"`
+	Category    types.ViolationCategory `json:"category"`
+	Tip         string                  `json:"tip,omitempty"`
+	RewriteHint string                  `json:"rewriteHint,omitempty"`
 }
 
 // llmReport captures the outcome of the two LLM passes. Either sub-field
@@ -180,6 +204,10 @@ const (
 	effortHigh llmEffort = "high"
 )
 
+// envLLMEffort names the environment variable that sets the effort level when
+// no flag does.
+const envLLMEffort = "SLOP_COP_LLM"
+
 // autoEnableLLM returns true when the LLM passes should be auto-enabled for
 // this invocation: the `codex` CLI is on $PATH.
 func autoEnableLLM() bool {
@@ -187,31 +215,23 @@ func autoEnableLLM() bool {
 	return err == nil
 }
 
-// resolveEffort picks the LLM effort level for this run. Precedence:
-//  1. --llm-effort when explicitly set (authoritative);
-//  2. --llm-deep (sugar alias: true→high, false→off), over
-//  3. --llm        (sugar alias: true→low,  false→off);
-//  4. no explicit flags → auto (codex-availability default).
-//
-// The second return value is true when the chosen effort came from the
-// auto-default — that's what distinguishes fail-open (auto) from
-// fail-closed (explicit) error handling for the LLM passes.
-func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag bool) (llmEffort, bool, error) {
+// resolveEffort picks the LLM effort level for this run, in the precedence
+// --llm-effort > --no-llm > --llm-deep > --llm > $SLOP_COP_LLM > auto. The
+// second result is true when the level came from auto, which is what makes an
+// auto-enabled pass fail open where an explicit one fails closed.
+func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag, noLLMFlag bool) (llmEffort, bool, error) {
 	if cmd.Flags().Changed("llm-effort") {
-		switch strings.ToLower(effortFlag) {
-		case "off":
-			return effortOff, false, nil
-		case "low":
-			return effortLow, false, nil
-		case "high":
-			return effortHigh, false, nil
-		case "", "auto":
-			return autoEffort(), true, nil
-		default:
+		eff, auto, err := parseEffort(effortFlag)
+		if err != nil {
 			return effortOff, false, fmt.Errorf("invalid --llm-effort %q (want off|low|high|auto)", effortFlag)
 		}
+		return eff, auto, nil
 	}
-	// --llm-deep is more specific than --llm, so let it win.
+	// --no-llm names an outcome rather than a tier, so it beats both tier
+	// aliases; --llm-deep is more specific than --llm, so it wins there.
+	if cmd.Flags().Changed("no-llm") && noLLMFlag {
+		return effortOff, false, nil
+	}
 	if cmd.Flags().Changed("llm-deep") {
 		if deepFlag {
 			return effortHigh, false, nil
@@ -224,7 +244,30 @@ func resolveEffort(cmd *cobra.Command, effortFlag string, llmFlag, deepFlag bool
 		}
 		return effortOff, false, nil
 	}
+	if raw := strings.TrimSpace(os.Getenv(envLLMEffort)); raw != "" {
+		eff, auto, err := parseEffort(raw)
+		if err != nil {
+			return effortOff, false, fmt.Errorf("invalid %s %q (want off|low|high|auto)", envLLMEffort, raw)
+		}
+		return eff, auto, nil
+	}
 	return autoEffort(), true, nil
+}
+
+// parseEffort maps an effort word onto a level. The second result is true for
+// "auto", the one value resolved through the claude-availability default.
+func parseEffort(raw string) (llmEffort, bool, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "off":
+		return effortOff, false, nil
+	case "low":
+		return effortLow, false, nil
+	case "high":
+		return effortHigh, false, nil
+	case "", "auto":
+		return autoEffort(), true, nil
+	}
+	return effortOff, false, fmt.Errorf("want off|low|high|auto")
 }
 
 func autoEffort() llmEffort {
@@ -234,32 +277,55 @@ func autoEffort() llmEffort {
 	return effortOff
 }
 
+// ruleCounts totals the catalogue by tier so the help text cannot drift from
+// the rules themselves. LLM rules are counted by RequiresLLM: false-range
+// carries an LLMTier it does not use.
+func ruleCounts() (client, sentence, document int) {
+	for _, r := range rules.All {
+		switch {
+		case !r.RequiresLLM:
+			client++
+		case r.LLMTier == types.LLMTierDocument:
+			document++
+		default:
+			sentence++
+		}
+	}
+	return client, sentence, document
+}
+
 func newCheckCmd() *cobra.Command {
 	var (
-		llmFlag   bool
-		deepFlag  bool
-		effort    string
-		sentModel string
-		docModel  string
-		sentTO    time.Duration
-		docTO     time.Duration
-		langMode  string
-		linesFlag string
-		standard  string
+		llmFlag    bool
+		deepFlag   bool
+		noLLMFlag  bool
+		effort     string
+		sentModel  string
+		docModel   string
+		sentTO     time.Duration
+		docTO      time.Duration
+		langMode   string
+		linesFlag  string
+		standard   string
+		configFlag string
+		strictFlag bool
 	)
+	client, sentence, document := ruleCounts()
 	cmd := &cobra.Command{
 		Use:   "check [path|-]",
 		Short: "Run detectors over a file (or stdin) and emit a JSON report.",
-		Long: `Runs the 42 client-side rules by default. Two optional LLM passes
+		Long: fmt.Sprintf(`Runs the %d client-side rules by default. Two optional LLM passes
 run via the codex CLI:
 
-  low   sentence-tier semantic analysis
-  high  low + document-tier structural analysis
+  low   sentence-tier semantic analysis, %d rules
+  high  low + document-tier structural analysis, %d rules
 
 Choose one with --llm-effort (off|low|high|auto), or use the sugar aliases:
   --llm       → --llm-effort=low
   --llm-deep  → --llm-effort=high
+  --no-llm    → --llm-effort=off
 
+$SLOP_COP_LLM takes the same four values and applies when no flag does.
 When the codex CLI is on $PATH, --llm-effort=auto resolves to 'low';
 otherwise 'off'. Auto-enabled passes fail open (the
 failure is reported under 'llm.<tier>.error' and the client-side results
@@ -282,14 +348,25 @@ Pick a mode with --lang:
 Suppressions inside masked modes drop structural false positives
 (e.g. 'dramatic-fragment' on headings, 'staccato-burst' across list items).
 
-Rules come in two layers, both on by default. Pick with --standard:
+The %d rules come in three layers, all on by default. Pick with --standard:
 
-  all    (default) both layers.
-  slop   the original LLM-tell catalogue: does this sound like an LLM?
-  base   the plain-language base layer: can this be read once and understood?
+  all     (default) every layer.
+  slop    the original LLM-tell catalogue: does this sound like an LLM?
+  base    the plain-language base layer: can this be read once and understood?
+  google  the Google developer documentation style guide.
 
 The selection applies to the LLM passes too — a layer left out never reaches
 the prompt.
+
+Individual rules are suppressed by a %s resolved by walking up from
+the input path (--config overrides it):
+
+  disable = ["colon-elaboration"]
+  enable_only = ["overused-intensifiers"]
+
+  [[overrides]]
+  paths = ["docs/**/*.md"]
+  disable = ["unformatted-code-identifier"]
 
 Use --lines to report only the violations that begin within a 1-based inclusive
 line range, while still scanning the whole document for context — useful for
@@ -297,17 +374,22 @@ linting just the lines an edit touched:
 
   50:80  a closed range          50:  from line 50 to EOF
   :80    from line 1 to line 80  50   a single line`,
+			client, sentence, document, len(rules.All), configName),
 		Example: `  slop-cop check article.md --pretty
-  cat article.md | slop-cop check --llm-effort=off
-  slop-cop check component.tsx --lang=tsx --llm-effort=off
-  slop-cop check README.md --lines 50:80
+  cat article.md | slop-cop check --no-llm
+  slop-cop check component.tsx --lang=tsx --no-llm
+  slop-cop check README.md --lines 50:80 --format=compact
   slop-cop check - --lang=markdown --llm-effort=high < article.md`,
 		Args: cobra.MaximumNArgs(1),
 	}
 	pretty := addPrettyFlag(cmd)
-	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = low when the codex CLI is on $PATH, off otherwise.")
+	format := addFormatFlag(cmd)
+	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = low when the codex CLI is on $PATH, off otherwise. $SLOP_COP_LLM sets it when no flag does.")
 	cmd.Flags().BoolVar(&llmFlag, "llm", false, "Alias for --llm-effort=low (sentence tier).")
 	cmd.Flags().BoolVar(&deepFlag, "llm-deep", false, "Alias for --llm-effort=high (sentence + document tiers).")
+	cmd.Flags().BoolVar(&noLLMFlag, "no-llm", false, "Alias for --llm-effort=off (client-side rules only). Wins over --llm and --llm-deep.")
+	cmd.Flags().StringVar(&configFlag, "config", "", "Path to a "+configName+". Default: the nearest one above the input path; its absence is not an error.")
+	cmd.Flags().BoolVar(&strictFlag, "strict", false, "Exit 1 when the report carries violations. Off by default: a completed run exits 0 whatever it found.")
 	cmd.Flags().StringVar(&sentModel, "sentence-model", llm.DefaultSentenceModel, "Codex model slug for the sentence pass.")
 	cmd.Flags().StringVar(&docModel, "document-model", llm.DefaultDocumentModel, "Codex model slug for the document pass.")
 	cmd.Flags().DurationVar(&sentTO, "sentence-timeout", llm.DefaultSentenceTimeout, "Wall-clock bound on each sentence-pass chunk, retries included.")
@@ -321,8 +403,17 @@ linting just the lines an edit touched:
 		if err != nil {
 			return usageError{err: err}
 		}
+		outFormat, err := resolveFormat(*format)
+		if err != nil {
+			return usageError{err: err}
+		}
 
 		path := pathArg(args)
+		filter, configFile, err := resolveRuleFilter(configFlag, path)
+		if err != nil {
+			return err
+		}
+
 		text, err := readInput(path)
 		if err != nil {
 			return err
@@ -339,7 +430,7 @@ linting just the lines an edit touched:
 			return usageError{err: err}
 		}
 
-		eff, auto, err := resolveEffort(cmd, effort, llmFlag, deepFlag)
+		eff, auto, err := resolveEffort(cmd, effort, llmFlag, deepFlag, noLLMFlag)
 		if err != nil {
 			return usageError{err: err}
 		}
@@ -369,8 +460,15 @@ linting just the lines an edit touched:
 		}
 		if std.runsGoogle() {
 			violations = append(violations, detectors.RunGoogle(scanText)...)
+		}
+		// Filtering precedes supersession so a disabled google rule cannot
+		// silence a slop rule on its span from beyond the grave.
+		violations = filter.keep(violations)
+		if std.runsGoogle() {
 			violations = dropSuperseded(violations)
 		}
+
+		catalogue := filter.catalogue(std.catalogue())
 
 		var llmRep *llmReport
 		ensureReport := func() *llmReport {
@@ -381,7 +479,7 @@ linting just the lines an edit touched:
 		}
 
 		if runSentence {
-			opts := llm.Options{Model: sentModel, Timeout: sentTO, Rules: std.catalogue()}
+			opts := llm.Options{Model: sentModel, Timeout: sentTO, Rules: catalogue}
 			vs, err := llm.RunSentence(ctx, scanText, opts)
 			if err != nil {
 				if auto {
@@ -396,7 +494,7 @@ linting just the lines an edit touched:
 			}
 		}
 		if runDocument {
-			opts := llm.Options{Model: docModel, Timeout: docTO, Rules: std.catalogue()}
+			opts := llm.Options{Model: docModel, Timeout: docTO, Rules: catalogue}
 			vs, err := llm.RunDocument(ctx, scanText, opts)
 			if err != nil {
 				if auto {
@@ -413,6 +511,7 @@ linting just the lines an edit touched:
 		// Unconditional: the two client layers share the elevated-register rule
 		// ID, so a merged run can collide without any LLM pass having run.
 		violations = detectors.Deduplicate(violations)
+		violations = filter.keep(violations)
 
 		if analyzer != nil {
 			violations = analyzer.ApplySuppressions(violations, suppress, text)
@@ -433,7 +532,15 @@ linting just the lines an edit touched:
 			read = readability.Analyze(scanText)
 		}
 
+		ver, _ := buildMetadata()
+		// Best-effort, like the version beside it: binary_path is diagnostic,
+		// so a process that cannot self-locate loses the field, not the run.
+		binary, _ := os.Executable()
+
 		report := checkReport{
+			Ran:              true,
+			Version:          ver,
+			BinaryPath:       binary,
 			TextLength:       len(text),
 			Violations:       violations,
 			CountsByRule:     map[string]int{},
@@ -442,14 +549,34 @@ linting just the lines an edit touched:
 			LLMEffort:        string(eff),
 			LLM:              llmRep,
 			Readability:      read,
+			Rules:            map[string]reportRule{},
+			Config:           configFile,
 		}
 		for _, v := range violations {
 			report.CountsByRule[v.RuleID]++
 			if rule, ok := rules.ByID[v.RuleID]; ok {
 				report.CountsByCategory[rule.Category]++
+				report.Rules[v.RuleID] = reportRule{
+					Name:        rule.Name,
+					Category:    rule.Category,
+					Tip:         rule.Tip,
+					RewriteHint: rule.RewriteHint,
+				}
 			}
 		}
-		return writeJSON(report, *pretty)
+
+		if outFormat == formatCompact {
+			err = writeCompact(report, text)
+		} else {
+			err = writeJSON(report, *pretty)
+		}
+		if err != nil {
+			return err
+		}
+		if strictFlag && len(report.CountsByRule) > 0 {
+			return errViolationsFound
+		}
+		return nil
 	}
 	return cmd
 }

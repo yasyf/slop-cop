@@ -99,7 +99,7 @@ tree-sitter masks every non-prose byte before detectors run, so hits land only o
 | `rules` | Print the rule catalogue as JSON; filter with `--category` or `--llm-only`. |
 | `version` | Print build metadata as JSON. |
 
-Input is the positional argument; pass `-` or omit it to read stdin. Run `slop-cop check --help` for the full flag list, or `slop-cop rules --pretty` for the taxonomy of all 226 rules. Exit codes are `0` for success, `2` for an input or IO error, `3` for an LLM subprocess failure, and `4` for a usage error.
+Input is the positional argument; pass `-` or omit it to read stdin. Run `slop-cop check --help` for the full flag list, or `slop-cop rules --pretty` for the taxonomy of all 226 rules. Exit codes are `0` for success, `2` for an input or IO error, `3` for an LLM subprocess failure, and `4` for a usage error; pass `--strict` to add `1` for a run that found violations.
 
 ## How it works
 

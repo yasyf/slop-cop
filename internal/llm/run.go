@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"unicode/utf8"
 
 	spawnllm "github.com/yasyf/spawnllm/go"
 )
@@ -90,10 +91,10 @@ func RunSchema(ctx context.Context, cfg Config, system, user string, schema json
 		if errors.Is(err, context.DeadlineExceeded) {
 			return context.Cause(runCtx)
 		}
-		return err
+		return cappedError(err)
 	}
 	if resp.Err != nil {
-		return resp.Err
+		return cappedError(resp.Err)
 	}
 
 	// RunOn resolves the schema payload to Result.Raw: the CLI's terminal
@@ -104,9 +105,30 @@ func RunSchema(ctx context.Context, cfg Config, system, user string, schema json
 	return nil
 }
 
+// providerErrorLimit caps a provider CLI's error text. A non-zero exit echoes
+// the rules prompt back, burying the exit code under hundreds of characters of
+// prompt an operator then stops reading.
+const providerErrorLimit = 200
+
+// cappedError trims a provider error to its scannable head, which is where the
+// CLI puts its name and exit code.
+func cappedError(err error) error {
+	msg := err.Error()
+	if len(msg) <= providerErrorLimit {
+		return err
+	}
+	return errors.New(truncate(msg, providerErrorLimit))
+}
+
+// truncate cuts s to at most n bytes, backing up to the last rune boundary so
+// the result is always valid UTF-8. Provider stderr and a model's own JSON
+// both carry multi-byte runes, and a byte slice through one corrupts the tail.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
 	}
 	return s[:n] + "…"
 }

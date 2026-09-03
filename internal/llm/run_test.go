@@ -3,12 +3,14 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	spawnllm "github.com/yasyf/spawnllm/go"
 )
@@ -161,5 +163,59 @@ func TestRunSchemaBoundsTheRetryLoop(t *testing.T) {
 	}
 	if elapsed > 30*time.Second {
 		t.Fatalf("call took %s against a %s budget: the retry loop is unbounded", elapsed, cfg.Timeout)
+	}
+}
+
+// TestCappedError pins the stderr cap: a provider that echoes the rules prompt
+// back on a non-zero exit must not bury its own exit code under it.
+func TestCappedError(t *testing.T) {
+	short := errors.New("codex exited 1: invalid_json_schema")
+	if got := cappedError(short); !errors.Is(got, short) {
+		t.Fatalf("a short error was rewritten: %v", got)
+	}
+
+	long := errors.New("codex exited 1: " + strings.Repeat("prompt ", 400))
+	got := cappedError(long).Error()
+	if len(got) > providerErrorLimit+len("…") {
+		t.Fatalf("capped error is %d bytes, want at most %d", len(got), providerErrorLimit+len("…"))
+	}
+	if !strings.HasPrefix(got, "codex exited 1: ") {
+		t.Fatalf("cap dropped the useful prefix: %q", got)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Fatalf("cap left no truncation marker: %q", got)
+	}
+}
+
+// TestCappedErrorKeepsRunesWhole pins the boundary case: provider stderr
+// carries paths and localized text, so a cap that lands mid-rune emits invalid
+// UTF-8 and json substitutes U+FFFD in llm.<tier>.error.
+func TestCappedErrorKeepsRunesWhole(t *testing.T) {
+	for pad := 0; pad < 8; pad++ {
+		head := "codex exited 1: " + strings.Repeat("x", pad)
+		long := errors.New(head + strings.Repeat("日本語テキスト", 100))
+		got := cappedError(long).Error()
+		if !utf8.ValidString(got) {
+			t.Fatalf("pad %d: capped error is not valid UTF-8: %q", pad, got)
+		}
+		if !strings.HasPrefix(got, head) {
+			t.Fatalf("pad %d: cap dropped the useful prefix: %q", pad, got)
+		}
+		if !strings.HasSuffix(got, "…") {
+			t.Fatalf("pad %d: cap left no truncation marker: %q", pad, got)
+		}
+	}
+}
+
+// TestTruncateKeepsRunesWhole covers the helper's other caller, which cuts a
+// model's own JSON: matchedText routinely carries multi-byte runes, since
+// em-dash-pivot matches one.
+func TestTruncateKeepsRunesWhole(t *testing.T) {
+	raw := `{"violations":[{"ruleId":"em-dash-pivot","matchedText":"` + strings.Repeat("—", 200) + `"}]}`
+	for n := 1; n < 64; n++ {
+		got := truncate(raw, n)
+		if !utf8.ValidString(got) {
+			t.Fatalf("truncate(raw, %d) is not valid UTF-8: %q", n, got)
+		}
 	}
 }
