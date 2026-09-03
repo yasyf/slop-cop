@@ -22,10 +22,14 @@ import (
 //     list items, is the document's structure showing through: a loose list
 //     parses as one paragraph carrying every item's sentences.
 //
+// [lang.DropMaskMatches] runs first, dropping every hit that only survived
+// because masking filled a code span or a URL with spaces.
+//
 // Pass the result of Analyze(src) as `suppress` and the original source as
 // `original`. The returned slice is a fresh allocation; callers need not
 // worry about aliasing with the input.
 func ApplySuppressions(vs []types.Violation, suppress []lang.Range, original string) []types.Violation {
+	vs = lang.DropMaskMatches(vs, suppress, original)
 	out := make([]types.Violation, 0, len(vs))
 	for _, v := range vs {
 		if lang.SuppressedByKind(v, suppress) {

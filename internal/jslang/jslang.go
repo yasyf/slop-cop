@@ -96,6 +96,11 @@ func (a *analyzer) Analyze(src string) (string, []lang.Range, error) {
 	defer tree.Close()
 
 	var suppress []lang.Range
+	var prose []lang.Range
+	keep := func(start, end int, kind lang.Kind) {
+		prose = append(prose, lang.Range{Start: start, End: end})
+		suppress = append(suppress, lang.Range{Start: start, End: end, Kind: kind})
+	}
 	walk(tree.RootNode(), func(n *sitter.Node) bool {
 		start, end := int(n.StartByte()), int(n.EndByte())
 		if start >= end || end > len(src) {
@@ -108,25 +113,44 @@ func (a *analyzer) Analyze(src string) (string, []lang.Range, error) {
 			if strings.HasPrefix(src[start:end], "/**") {
 				kind = lang.KindJSDoc
 			}
-			suppress = append(suppress, lang.Range{Start: start, End: end, Kind: kind})
+			keep(start, end, kind)
 			// Comments are leaves — no children worth visiting.
 			return false
 		case "string_fragment":
 			unmask(masked, src, start, end)
-			suppress = append(suppress, lang.Range{Start: start, End: end, Kind: lang.KindStringLiteral})
+			keep(start, end, lang.KindStringLiteral)
 			return false
 		case "jsx_text":
 			unmask(masked, src, start, end)
-			suppress = append(suppress, lang.Range{Start: start, End: end, Kind: lang.KindJSXText})
+			keep(start, end, lang.KindJSXText)
 			return false
 		}
 		return true
 	})
 
-	return string(masked), suppress, nil
+	return string(masked), append(suppress, maskedGaps(prose, len(src))...), nil
+}
+
+// maskedGaps returns the complement of the prose spans over [0, n) — every
+// byte the analyzer left as filler. The walk visits nodes in source order and
+// never descends into a prose node, so the spans arrive sorted and disjoint.
+func maskedGaps(prose []lang.Range, n int) []lang.Range {
+	var out []lang.Range
+	pos := 0
+	for _, r := range prose {
+		if r.Start > pos {
+			out = append(out, lang.Range{Start: pos, End: r.Start, Kind: lang.KindMasked})
+		}
+		pos = r.End
+	}
+	if pos < n {
+		out = append(out, lang.Range{Start: pos, End: n, Kind: lang.KindMasked})
+	}
+	return out
 }
 
 func (a *analyzer) ApplySuppressions(vs []types.Violation, suppress []lang.Range, original string) []types.Violation {
+	vs = lang.DropMaskMatches(vs, suppress, original)
 	out := make([]types.Violation, 0, len(vs))
 	for _, v := range vs {
 		if lang.SuppressedByKind(v, suppress) {
