@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"unicode/utf8"
 
 	spawnllm "github.com/yasyf/spawnllm/go"
 )
@@ -119,9 +120,15 @@ func cappedError(err error) error {
 	return errors.New(truncate(msg, providerErrorLimit))
 }
 
+// truncate cuts s to at most n bytes, backing up to the last rune boundary so
+// the result is always valid UTF-8. Provider stderr and a model's own JSON
+// both carry multi-byte runes, and a byte slice through one corrupts the tail.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
 	}
 	return s[:n] + "…"
 }

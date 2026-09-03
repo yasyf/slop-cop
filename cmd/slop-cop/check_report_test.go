@@ -97,7 +97,8 @@ func TestReportCarriesRunMarker(t *testing.T) {
 // TestReportCarriesBuildIdentity pins the fields that resolve a rule-ID
 // mismatch against the binary that produced the report.
 func TestReportCarriesBuildIdentity(t *testing.T) {
-	rep := decodeReport(t, checkOK(t, filepath.Join("testdata", "mixed.md"), "--llm-effort=off"))
+	out := checkOK(t, filepath.Join("testdata", "mixed.md"), "--llm-effort=off")
+	rep := decodeReport(t, out)
 	wantVersion, _ := buildMetadata()
 	if rep.Version != wantVersion {
 		t.Fatalf("version = %q, want %q", rep.Version, wantVersion)
@@ -108,6 +109,19 @@ func TestReportCarriesBuildIdentity(t *testing.T) {
 	}
 	if rep.BinaryPath != wantBinary {
 		t.Fatalf("binary_path = %q, want %q", rep.BinaryPath, wantBinary)
+	}
+
+	// Both keys are unconditional. A process that cannot self-locate empties
+	// the value; dropping the key would make a diagnostic gap look like the
+	// truncated payload `ran` exists to rule out.
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &keys); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, k := range []string{"ran", "version", "binary_path"} {
+		if _, ok := keys[k]; !ok {
+			t.Fatalf("report omits %q: %s", k, out)
+		}
 	}
 }
 
