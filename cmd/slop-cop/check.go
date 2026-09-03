@@ -28,7 +28,9 @@ type checkReport struct {
 	// report claiming it ran, so empty stdout never reads as a clean pass.
 	Ran bool `json:"ran"`
 	// Version and BinaryPath identify the build that produced the report,
-	// so a rule-ID mismatch resolves against the binary on disk.
+	// so a rule-ID mismatch resolves against the binary on disk. Both keys
+	// are always emitted; either value is empty when undeterminable, which
+	// is not a signal about the run. Ran is.
 	Version          string                          `json:"version"`
 	BinaryPath       string                          `json:"binary_path"`
 	TextLength       int                             `json:"text_length"`
@@ -531,10 +533,9 @@ linting just the lines an edit touched:
 		}
 
 		ver, _ := buildMetadata()
-		binary, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("resolving the running binary: %w", err)
-		}
+		// Best-effort, like the version beside it: binary_path is diagnostic,
+		// so a process that cannot self-locate loses the field, not the run.
+		binary, _ := os.Executable()
 
 		report := checkReport{
 			Ran:              true,
