@@ -168,3 +168,67 @@ func TestSlopRulesAreSuppressedOnStructure(t *testing.T) {
 		}
 	}
 }
+
+// TestTableShapeIsNotProseRhythm pins the cell-boundary suppressions: a hit
+// that straddles two or more table cells is the table's shape, while the same
+// words as a paragraph — and a hit that sits inside one cell — still report.
+func TestTableShapeIsNotProseRhythm(t *testing.T) {
+	cases := []struct {
+		name   string
+		table  string
+		prose  string
+		ruleID string
+	}{
+		{
+			name: "terse rows read as a staccato burst",
+			table: "| Flag | Effect |\n| --- | --- |\n| off | Nothing runs. |\n" +
+				"| low | One tier runs. |\n| high | Both tiers run. |\n| auto | It picks one. |\n",
+			prose:  "Nothing runs. One tier runs. Both tiers run. It picks one.\n",
+			ruleID: "staccato-burst",
+		},
+		{
+			name:   "adjacent cells read as one phrase",
+			table:  "| Flag | A | B |\n| --- | --- | --- |\n| off | none | none |\n",
+			prose:  "The failure is not uncommon.\n",
+			ruleID: "double-negative",
+		},
+		{
+			name: "a pipe-less table reads as one long paragraph",
+			table: "Flag | Effect\n--- | ---\na | It runs.\nb | It stops.\nc | It waits.\n" +
+				"d | It retries.\ne | It reports.\nf | It exits.\ng | It logs.\n",
+			prose: "It runs. It stops. It waits. It retries. It reports. It exits. It logs.\n",
+			// Only long-paragraph is asserted; the prose form trips staccato-burst too.
+			ruleID: "long-paragraph",
+		},
+		{
+			name: "a pipe-less table reads as one long sentence",
+			table: "Flag | Effect\n--- | ---\na | the runner starts the build and then runs the " +
+				"tests and after that it ships the artifact while the report lands last and " +
+				"none of this is a list and none of it is a heading either so it keeps going\n",
+			prose: "The runner starts the build and then runs the tests and after that it ships " +
+				"the artifact while the report lands last and none of this is a list and none " +
+				"of it is a heading either so it keeps going.\n",
+			ruleID: "long-sentence",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := reportedRules(t, c.table); got[c.ruleID] {
+				t.Fatalf("%s fired across table cells; got %v", c.ruleID, got)
+			}
+			if got := reportedRules(t, c.prose); !got[c.ruleID] {
+				t.Fatalf("%s should still fire on the same words as prose; got %v", c.ruleID, got)
+			}
+		})
+	}
+}
+
+// TestDoubleNegativeInsideOneCellStillReports is the narrowness proof for the
+// cell-boundary test: a blanket table-cell exclusion would have taken this hit
+// with it, which is why the rule is straddling, not overlapping.
+func TestDoubleNegativeInsideOneCellStillReports(t *testing.T) {
+	src := "| Flag | Effect |\n| --- | --- |\n| a | It is not uncommon. |\n"
+	if got := reportedRules(t, src); !got["double-negative"] {
+		t.Fatalf("a real double negative inside one cell should report; got %v", got)
+	}
+}

@@ -53,10 +53,10 @@ func decodeReport(t *testing.T, out string) checkReport {
 // emitted for these exact fixture bytes, so a byte match proves --standard=slop
 // reproduces the old tool's output — same violations, same offsets, same
 // counts, same field order. A drift here means the base layer leaked into the
-// slop layer; regenerating the goldens defeats the gate. The one sanctioned
-// regeneration so far dropped the six hits that only matched the spaces
-// masking left behind (lang.DropMaskMatches) and the nine that sat on list
-// structure (lang.Suppress).
+// slop layer; regenerating the goldens defeats the gate. The sanctioned
+// regenerations so far dropped the six hits that only matched the spaces
+// masking left behind (lang.DropMaskMatches), the nine that sat on list
+// structure (lang.Suppress), and one staccato-burst that was a table's rows.
 func TestStandardSlopMatchesPreBaseLayerGoldens(t *testing.T) {
 	cases := []struct {
 		fixture string
@@ -64,7 +64,7 @@ func TestStandardSlopMatchesPreBaseLayerGoldens(t *testing.T) {
 		want    int
 	}{
 		{"readme.md", "readme.slop.golden.json", 20},
-		{"skill.md", "skill.slop.golden.json", 39},
+		{"skill.md", "skill.slop.golden.json", 38},
 	}
 	for _, c := range cases {
 		t.Run(c.fixture, func(t *testing.T) {
