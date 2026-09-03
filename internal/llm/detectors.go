@@ -9,14 +9,14 @@ import (
 	"time"
 
 	"github.com/yasyf/slop-cop/internal/types"
+	spawnllm "github.com/yasyf/spawnllm/go"
 )
 
-// Default models match the TS source; timeouts are provisioned for the
-// measured latency of the current claude CLI, which the TS-source values
-// under-shot.
+// The :low reasoning suffix is load-bearing: luna's default medium effort
+// measured slower than low on both tiers for strictly fewer findings.
 const (
-	DefaultSentenceModel = "claude-haiku-4-5-20251001"
-	DefaultDocumentModel = "claude-sonnet-4-6"
+	DefaultSentenceModel = "gpt-5.6-luna:low"
+	DefaultDocumentModel = "gpt-5.6-luna:low"
 
 	DefaultSentenceTimeout = 120 * time.Second
 	DefaultDocumentTimeout = 180 * time.Second
@@ -36,7 +36,7 @@ type Options struct {
 	Rules []types.ViolationRule
 }
 
-func (o Options) config(defaultModel string, defaultTimeout time.Duration) Config {
+func (o Options) config(provider spawnllm.Provider, defaultModel string, defaultTimeout time.Duration) Config {
 	model := o.Model
 	if model == "" {
 		model = defaultModel
@@ -45,7 +45,7 @@ func (o Options) config(defaultModel string, defaultTimeout time.Duration) Confi
 	if timeout == 0 {
 		timeout = defaultTimeout
 	}
-	return Config{Model: model, Timeout: timeout}
+	return Config{Provider: provider, Model: model, Timeout: timeout}
 }
 
 type llmResult struct {
@@ -59,10 +59,10 @@ type violationsEnvelope struct {
 	Violations []llmResult `json:"violations"`
 }
 
-// RunSentence is the fast-pass (Haiku) sentence-level detector. Long inputs
-// are chunked on paragraph boundaries, analysed in parallel, and merged.
+// RunSentence is the fast-pass sentence-level detector. Long inputs are
+// chunked on paragraph boundaries, analysed in parallel, and merged.
 func RunSentence(ctx context.Context, text string, opts Options) ([]types.Violation, error) {
-	cfg := opts.config(DefaultSentenceModel, DefaultSentenceTimeout)
+	cfg := opts.config(spawnllm.ProviderCodex, DefaultSentenceModel, DefaultSentenceTimeout)
 	prompt := BuildSentencePrompt(opts.Rules)
 	chunks := chunkText(text)
 	if len(chunks) == 1 {
@@ -105,9 +105,9 @@ func RunSentence(ctx context.Context, text string, opts Options) ([]types.Violat
 	return dedupeByRuleAndMatch(merged), nil
 }
 
-// RunDocument is the deep-pass (Sonnet) document-level detector.
+// RunDocument is the deep-pass document-level detector.
 func RunDocument(ctx context.Context, text string, opts Options) ([]types.Violation, error) {
-	cfg := opts.config(DefaultDocumentModel, DefaultDocumentTimeout)
+	cfg := opts.config(spawnllm.ProviderCodex, DefaultDocumentModel, DefaultDocumentTimeout)
 	return callDetector(ctx, cfg, DocumentSystemPrompt, BuildDocumentPrompt(opts.Rules), text, text)
 }
 

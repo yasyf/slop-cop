@@ -26,7 +26,7 @@ type usageError struct{ err error }
 func (u usageError) Error() string { return u.err.Error() }
 func (u usageError) Unwrap() error { return u.err }
 
-// llmError flags failures that originated in the `claude` subprocess layer.
+// llmError flags failures that originated in the LLM subprocess layer.
 type llmError struct{ err error }
 
 func (l llmError) Error() string { return l.err.Error() }
@@ -56,7 +56,7 @@ func newRoot() *cobra.Command {
 		Use:     "slop-cop",
 		Short:   "Detect LLM-generated prose patterns; emit structured JSON.",
 		Version: ver,
-		Long: `slop-cop runs regex + structural detectors (and optional Claude-backed
+		Long: `slop-cop runs regex + structural detectors (and optional Codex-backed
 semantic analysis) over a piece of text, and prints a JSON report aimed at
 other agents.
 
@@ -66,7 +66,7 @@ or omitted. Output is JSON on stdout; errors go to stderr.
 Exit codes:
   0  success (including "no violations found")
   2  input/IO error
-  3  claude subprocess error
+  3  LLM subprocess error
   4  flag/usage error`,
 	}
 	// --version prints the bare stamped version, one line, no decoration:

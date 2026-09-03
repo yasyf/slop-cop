@@ -8,28 +8,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// pathWithClaude returns a PATH holding exactly one entry: a directory
-// containing an executable named claude.
-func pathWithClaude(t *testing.T) string {
+// pathWithCodex returns a PATH holding exactly one entry: a directory
+// containing an executable named codex.
+func pathWithCodex(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec // G306: an executable stub on a test-owned temp PATH.
-		t.Fatalf("write fake claude: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "codex"), []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec // G306: an executable stub on a test-owned temp PATH.
+		t.Fatalf("write fake codex: %v", err)
 	}
 	return dir
 }
 
 // Tests for autoEnableLLM. The LLM passes are auto-enabled whenever the
-// claude CLI is reachable on $PATH.
+// codex CLI is reachable on $PATH.
 
 func TestAutoEnableLLM(t *testing.T) {
-	t.Setenv("PATH", pathWithClaude(t))
+	t.Setenv("PATH", pathWithCodex(t))
 	if !autoEnableLLM() {
-		t.Fatalf("autoEnableLLM: expected true with claude on PATH")
+		t.Fatalf("autoEnableLLM: expected true with codex on PATH")
 	}
 	t.Setenv("PATH", t.TempDir())
 	if autoEnableLLM() {
-		t.Fatalf("autoEnableLLM: expected false with claude absent from PATH")
+		t.Fatalf("autoEnableLLM: expected false with codex absent from PATH")
 	}
 }
 
@@ -50,22 +50,22 @@ func newCheckForTest(t *testing.T, args []string) *cobra.Command {
 	return cmd
 }
 
-// TestResolveEffort exercises the full precedence table. claudeOnPath drives
+// TestResolveEffort exercises the full precedence table. codexOnPath drives
 // whether the auto path picks "low" or "off".
 func TestResolveEffort(t *testing.T) {
 	cases := []struct {
-		name         string
-		flags        []string
-		claudeOnPath bool
-		wantEff      llmEffort
-		wantAuto     bool
+		name        string
+		flags       []string
+		codexOnPath bool
+		wantEff     llmEffort
+		wantAuto    bool
 	}{
 		// Explicit --llm-effort is authoritative.
 		{"effort=off explicit", []string{"--llm-effort=off"}, true, effortOff, false},
 		{"effort=low explicit", []string{"--llm-effort=low"}, true, effortLow, false},
 		{"effort=high explicit", []string{"--llm-effort=high"}, false, effortHigh, false},
-		{"effort=auto with claude", []string{"--llm-effort=auto"}, true, effortLow, true},
-		{"effort=auto without claude", []string{"--llm-effort=auto"}, false, effortOff, true},
+		{"effort=auto with codex", []string{"--llm-effort=auto"}, true, effortLow, true},
+		{"effort=auto without codex", []string{"--llm-effort=auto"}, false, effortOff, true},
 
 		// --llm-deep alias.
 		{"--llm-deep=true", []string{"--llm-deep"}, false, effortHigh, false},
@@ -82,14 +82,14 @@ func TestResolveEffort(t *testing.T) {
 		{"effort=low + --llm-deep", []string{"--llm-effort=low", "--llm-deep"}, false, effortLow, false},
 
 		// No flags → auto.
-		{"default with claude", nil, true, effortLow, true},
-		{"default without claude", nil, false, effortOff, true},
+		{"default with codex", nil, true, effortLow, true},
+		{"default without codex", nil, false, effortOff, true},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if c.claudeOnPath {
-				t.Setenv("PATH", pathWithClaude(t))
+			if c.codexOnPath {
+				t.Setenv("PATH", pathWithCodex(t))
 			} else {
 				t.Setenv("PATH", t.TempDir())
 			}

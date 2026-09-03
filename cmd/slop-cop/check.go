@@ -181,9 +181,9 @@ const (
 )
 
 // autoEnableLLM returns true when the LLM passes should be auto-enabled for
-// this invocation: the `claude` CLI is on $PATH.
+// this invocation: the `codex` CLI is on $PATH.
 func autoEnableLLM() bool {
-	_, err := exec.LookPath("claude")
+	_, err := exec.LookPath("codex")
 	return err == nil
 }
 
@@ -191,7 +191,7 @@ func autoEnableLLM() bool {
 //  1. --llm-effort when explicitly set (authoritative);
 //  2. --llm-deep (sugar alias: true→high, false→off), over
 //  3. --llm        (sugar alias: true→low,  false→off);
-//  4. no explicit flags → auto (claude-availability default).
+//  4. no explicit flags → auto (codex-availability default).
 //
 // The second return value is true when the chosen effort came from the
 // auto-default — that's what distinguishes fail-open (auto) from
@@ -251,16 +251,16 @@ func newCheckCmd() *cobra.Command {
 		Use:   "check [path|-]",
 		Short: "Run detectors over a file (or stdin) and emit a JSON report.",
 		Long: `Runs the 42 client-side rules by default. Two optional LLM passes
-run via the claude CLI:
+run via the codex CLI:
 
-  low   sentence-tier semantic analysis (Claude Haiku)
-  high  low + document-tier structural analysis (Claude Sonnet)
+  low   sentence-tier semantic analysis
+  high  low + document-tier structural analysis
 
 Choose one with --llm-effort (off|low|high|auto), or use the sugar aliases:
   --llm       → --llm-effort=low
   --llm-deep  → --llm-effort=high
 
-When the claude CLI is on $PATH, --llm-effort=auto resolves to 'low';
+When the codex CLI is on $PATH, --llm-effort=auto resolves to 'low';
 otherwise 'off'. Auto-enabled passes fail open (the
 failure is reported under 'llm.<tier>.error' and the client-side results
 are still returned); explicit passes propagate the error as exit code 3.
@@ -305,11 +305,11 @@ linting just the lines an edit touched:
 		Args: cobra.MaximumNArgs(1),
 	}
 	pretty := addPrettyFlag(cmd)
-	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = low when the claude CLI is on $PATH, off otherwise.")
-	cmd.Flags().BoolVar(&llmFlag, "llm", false, "Alias for --llm-effort=low (sentence tier via Claude Haiku).")
-	cmd.Flags().BoolVar(&deepFlag, "llm-deep", false, "Alias for --llm-effort=high (sentence + document tiers, Haiku + Sonnet).")
-	cmd.Flags().StringVar(&sentModel, "sentence-model", llm.DefaultSentenceModel, "Model slug for the sentence pass.")
-	cmd.Flags().StringVar(&docModel, "document-model", llm.DefaultDocumentModel, "Model slug for the document pass.")
+	cmd.Flags().StringVar(&effort, "llm-effort", "auto", "LLM analysis effort: off|low|high|auto. Auto = low when the codex CLI is on $PATH, off otherwise.")
+	cmd.Flags().BoolVar(&llmFlag, "llm", false, "Alias for --llm-effort=low (sentence tier).")
+	cmd.Flags().BoolVar(&deepFlag, "llm-deep", false, "Alias for --llm-effort=high (sentence + document tiers).")
+	cmd.Flags().StringVar(&sentModel, "sentence-model", llm.DefaultSentenceModel, "Codex model slug for the sentence pass.")
+	cmd.Flags().StringVar(&docModel, "document-model", llm.DefaultDocumentModel, "Codex model slug for the document pass.")
 	cmd.Flags().DurationVar(&sentTO, "sentence-timeout", llm.DefaultSentenceTimeout, "Timeout for each sentence-pass chunk.")
 	cmd.Flags().DurationVar(&docTO, "document-timeout", llm.DefaultDocumentTimeout, "Timeout for the document pass.")
 	cmd.Flags().StringVar(&langMode, "lang", "auto", "Input language: auto|text|markdown|html|jsx|tsx|ts|js.")
@@ -385,7 +385,7 @@ linting just the lines an edit touched:
 			vs, err := llm.RunSentence(ctx, scanText, opts)
 			if err != nil {
 				if auto {
-					fmt.Fprintln(os.Stderr, "slop-cop: sentence LLM pass skipped (auto-enabled, claude failed):", err)
+					fmt.Fprintln(os.Stderr, "slop-cop: sentence LLM pass skipped (auto-enabled, codex failed):", err)
 					ensureReport().Sentence = &llmPassStatus{Auto: true, Ran: false, Error: err.Error()}
 				} else {
 					return llmError{err: fmt.Errorf("sentence pass: %w", err)}
@@ -400,7 +400,7 @@ linting just the lines an edit touched:
 			vs, err := llm.RunDocument(ctx, scanText, opts)
 			if err != nil {
 				if auto {
-					fmt.Fprintln(os.Stderr, "slop-cop: document LLM pass skipped (auto-enabled, claude failed):", err)
+					fmt.Fprintln(os.Stderr, "slop-cop: document LLM pass skipped (auto-enabled, codex failed):", err)
 					ensureReport().Document = &llmPassStatus{Auto: true, Ran: false, Error: err.Error()}
 				} else {
 					return llmError{err: fmt.Errorf("document pass: %w", err)}

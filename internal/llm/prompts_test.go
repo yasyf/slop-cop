@@ -136,18 +136,18 @@ func TestBasePromptCarriesOnlyBaseRules(t *testing.T) {
 
 // TestOptionsRulesReachTheProcess closes the loop between the layer selection
 // and the subprocess: a rule the caller filters out must never reach the
-// prompt claude is fed, not merely be dropped from the response. spawnllm
+// prompt codex is fed, not merely be dropped from the response. spawnllm
 // delivers the prompt on stdin, so that is what the stand-in captures.
 func TestOptionsRulesReachTheProcess(t *testing.T) {
-	fixture, err := filepath.Abs(filepath.Join("testdata", "claude_stream_array.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	response := writeResponse(t, `{"violations":[]}`)
 	capture := filepath.Join(t.TempDir(), "stdin")
 	dir := t.TempDir()
-	script := fmt.Sprintf("#!/bin/sh\n/bin/cat > %q\nexec /bin/cat %q\n", capture, fixture)
+	script := fmt.Sprintf(
+		"#!/bin/sh\n/bin/cat > %q\nwhile [ $# -gt 0 ]; do\n\tif [ \"$1\" = -o ]; then exec /bin/cat %q >\"$2\"; fi\n\tshift\ndone\n",
+		capture, response,
+	)
 	//nolint:gosec // G306: an executable stub on a test-owned temp PATH.
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "codex"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)
@@ -166,14 +166,14 @@ func TestOptionsRulesReachTheProcess(t *testing.T) {
 	}
 	prompt := string(b)
 	if !strings.Contains(prompt, `"agentless-passive":`) {
-		t.Fatalf("the base sentence rule never reached claude:\n%s", prompt)
+		t.Fatalf("the base sentence rule never reached codex:\n%s", prompt)
 	}
 	for _, r := range rules.Slop {
 		if r.LLMTier != types.LLMTierSentence {
 			continue
 		}
 		if strings.Contains(prompt, `"`+r.ID+`":`) {
-			t.Fatalf("slop rule %s reached claude despite Rules=rules.Base", r.ID)
+			t.Fatalf("slop rule %s reached codex despite Rules=rules.Base", r.ID)
 		}
 	}
 }

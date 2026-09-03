@@ -88,9 +88,9 @@ root. The wrapper derives its paths from its own location, and
    which masks code so detectors only see comments, string literals,
    template quasis, and JSX text.
 
-   With the `claude` CLI on `$PATH`, the default `--llm-effort=auto`
+   With the `codex` CLI on `$PATH`, the default `--llm-effort=auto`
    resolves to `low` and runs the sentence tier. The `llm_effort` and `llm`
-   fields in the report tell you what actually ran; when `claude` is
+   fields in the report tell you what actually ran; when `codex` is
    unreachable, slop-cop reports the auto-enabled passes as skipped with an
    `error` message and still returns the client-side results. Pass
    `--llm-effort=off` to cut latency to nothing on small edits, or
@@ -193,19 +193,19 @@ the user sees.
 
 Two LLM passes layer on top of the 42 client-side rules, selected via
 `--llm-effort=off|low|high|auto`. `auto` is the default and resolves to
-`low` when the `claude` CLI is on `$PATH`, so usually you don't need to
+`low` when the `codex` CLI is on `$PATH`, so usually you don't need to
 think about it.
 
 | Effort | Passes run                                 | Extra rules caught                               |
 | ------ | ------------------------------------------ | ------------------------------------------------ |
 | `off`  | none                                       | none                                             |
-| `low`  | sentence tier (Claude Haiku)               | `balanced-take`, `unnecessary-elaboration`, `grandiose-stakes`, `empathy-performance`, `sycophantic-frame`, `throat-clearing`, `pivot-paragraph`, `historical-analogy`, `false-vulnerability`, `triple-construction`, and the base layer's `agentless-passive` |
-| `high` | sentence + document (Haiku + Sonnet)       | the low list plus `dead-metaphor`, `one-point-dilution`, `fractal-summaries`, and the base layer's `term-consistency` |
+| `low`  | sentence tier                              | `balanced-take`, `unnecessary-elaboration`, `grandiose-stakes`, `empathy-performance`, `sycophantic-frame`, `throat-clearing`, `pivot-paragraph`, `historical-analogy`, `false-vulnerability`, `triple-construction`, and the base layer's `agentless-passive` |
+| `high` | sentence + document                        | the low list plus `dead-metaphor`, `one-point-dilution`, `fractal-summaries`, and the base layer's `term-consistency` |
 
 The sugar aliases are `--llm` for `--llm-effort=low` and `--llm-deep` for
 `--llm-effort=high`.
 
-Both tiers drive the `claude` CLI, so the check needs no API key. When the
+Both tiers drive the `codex` CLI, so the check needs no API key. When the
 CLI is missing, or a call fails for any reason such as a missing login, a
 rate limit, or a timeout, slop-cop skips the auto-enabled pass and reports
 its error; the client-side output always returns. Inspect
