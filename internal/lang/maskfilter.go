@@ -110,10 +110,11 @@ func firedSpans(prose string) map[firedSpan]struct{} {
 	return out
 }
 
-// deterministic reports whether a rule is produced by the detectors alone. A
-// rule either pass can emit is excluded: an LLM hit would never survive a
-// detector re-run.
+// deterministic reports whether a detector produces this rule. Only
+// [types.ViolationRule.RequiresLLM] answers that: `false-range` runs
+// client-side while carrying a stray sentence tier, so a bare LLMTier test
+// reads it as an LLM rule and quietly exempts it from the whole filter.
 func deterministic(ruleID string) bool {
 	r, ok := rules.ByID[ruleID]
-	return ok && !r.RequiresLLM && r.LLMTier == ""
+	return ok && !r.RequiresLLM
 }
