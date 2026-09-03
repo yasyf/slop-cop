@@ -77,6 +77,12 @@ homebrew_casks:
     ids: [slop-cop]
     binaries:
       - slop-cop
+    # Quarantined cask binaries block the first exec on a Gatekeeper consent
+    # dialog, before dyld runs — no headless agent can answer it.
+    hooks:
+      post:
+        install: |
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/slop-cop"]
     repository:
       owner: yasyf
       name: homebrew-tap
