@@ -13,46 +13,53 @@ import (
 	spawnllm "github.com/yasyf/spawnllm/go"
 )
 
-// fakeClaude puts an executable named claude on an otherwise-empty $PATH
-// that ignores its arguments and prints the response file to stdout.
-func fakeClaude(t *testing.T, responsePath string) {
+// The stub bodies in this package run on shell builtins alone. Spawning cat
+// costs a second execve per call, which under the endpoint-security agents
+// that inspect every exec on a Mac is ~0.3s rather than microseconds.
+const drainStdin = "while IFS= read -r line; do :; done\n"
+
+// shQuote renders s as a single-quoted shell word, so a stub can carry a JSON
+// payload in its own body.
+func shQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// printPayload is a stub command writing payload to stdout.
+func printPayload(payload string) string {
+	return "printf '%s' " + shQuote(payload)
+}
+
+// codexWriteResult is a stub fragment scanning argv for -o and writing payload
+// to the path after it, which is where spawnllm reads a codex result from.
+func codexWriteResult(payload string) string {
+	return "while [ $# -gt 0 ]; do\n\tif [ \"$1\" = -o ]; then printf '%s' " +
+		shQuote(payload) + " > \"$2\"; exit 0; fi\n\tshift\ndone\n"
+}
+
+// writeStub puts an executable named name, running body, on an
+// otherwise-empty $PATH.
+func writeStub(t *testing.T, name, body string) {
 	t.Helper()
 	dir := t.TempDir()
-	script := fmt.Sprintf("#!/bin/sh\nexec /bin/cat %q\n", responsePath)
 	//nolint:gosec // G306: an executable stub on a test-owned temp PATH.
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake claude: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+		t.Fatalf("write fake %s: %v", name, err)
 	}
 	t.Setenv("PATH", dir)
+}
+
+// fakeClaude puts an executable named claude on an otherwise-empty $PATH
+// that ignores its arguments and prints payload to stdout.
+func fakeClaude(t *testing.T, payload string) {
+	t.Helper()
+	writeStub(t, "claude", drainStdin+printPayload(payload)+"\n")
 }
 
 // fakeCodex puts an executable named codex on an otherwise-empty $PATH that
-// copies the response file to the -o path, which is where spawnllm reads a
-// codex result from.
-func fakeCodex(t *testing.T, responsePath string) {
+// answers with payload.
+func fakeCodex(t *testing.T, payload string) {
 	t.Helper()
-	dir := t.TempDir()
-	script := fmt.Sprintf(
-		"#!/bin/sh\nwhile [ $# -gt 0 ]; do\n\tif [ \"$1\" = -o ]; then exec /bin/cat %q >\"$2\"; fi\n\tshift\ndone\n",
-		responsePath,
-	)
-	//nolint:gosec // G306: an executable stub on a test-owned temp PATH.
-	if err := os.WriteFile(filepath.Join(dir, "codex"), []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake codex: %v", err)
-	}
-	t.Setenv("PATH", dir)
-}
-
-// writeResponse writes payload to a file in a test-owned temp dir and returns
-// its absolute path.
-func writeResponse(t *testing.T, payload string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "response.json")
-	//nolint:gosec // G306: a fixture copy in a test-owned temp dir.
-	if err := os.WriteFile(path, []byte(payload), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	writeStub(t, "codex", codexWriteResult(payload))
 }
 
 // TestRunSchemaStreamArray replays a real captured `claude -p --output-format
@@ -60,11 +67,12 @@ func writeResponse(t *testing.T, payload string) string {
 // element carries the schema payload — and proves RunSchema extracts and
 // decodes it.
 func TestRunSchemaStreamArray(t *testing.T) {
-	fixture, err := filepath.Abs(filepath.Join("testdata", "claude_stream_array.json"))
+	//nolint:gosec // G304: a fixed testdata path, not user input.
+	fixture, err := os.ReadFile(filepath.Join("testdata", "claude_stream_array.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	fakeClaude(t, fixture)
+	fakeClaude(t, string(fixture))
 
 	cfg := Config{Provider: spawnllm.ProviderClaude, Model: DefaultRewriteModel, Timeout: 30 * time.Second}
 	var env violationsEnvelope
@@ -104,8 +112,7 @@ func TestRunSchemaPanicsOnAnUnroutedProvider(t *testing.T) {
 // UTF-8 byte offsets in the original input.
 func TestRunSentenceResolvesByteOffsets(t *testing.T) {
 	const text = "Café rules. We utilize this approach."
-	payload := `{"violations":[{"ruleId":"elevated-register","matchedText":"utilize","explanation":"register","suggestedChange":"use"}]}`
-	fakeCodex(t, writeResponse(t, payload))
+	fakeCodex(t, `{"violations":[{"ruleId":"elevated-register","matchedText":"utilize","explanation":"register","suggestedChange":"use"}]}`)
 
 	vs, err := RunSentence(context.Background(), text, Options{Timeout: 30 * time.Second})
 	if err != nil {
