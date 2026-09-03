@@ -21,6 +21,12 @@ import (
 //   - `long-paragraph` inside a heading range, or straddling two or more
 //     list items, is the document's structure showing through: a loose list
 //     parses as one paragraph carrying every item's sentences.
+//   - `long-sentence`, `long-paragraph`, `staccato-burst` and
+//     `double-negative` straddling two or more table cells are the table's
+//     shape, not the prose's: a row of terse cells reads to the detectors as
+//     a burst of short sentences, and two adjacent cells read as one phrase.
+//     The test is the cell boundary, so a hit inside a single cell — a real
+//     double negative in one cell — still reports.
 //
 // [lang.DropMaskMatches] runs first, dropping every hit that only survived
 // because masking filled a code span or a URL with spaces.
@@ -36,12 +42,26 @@ func ApplySuppressions(vs []types.Violation, suppress []lang.Range, original str
 			continue
 		}
 		switch v.RuleID {
-		case "dramatic-fragment", "long-sentence":
+		case "dramatic-fragment":
 			if lang.Overlaps(v.StartIndex, v.EndIndex, suppress, lang.KindHeading) {
+				continue
+			}
+		case "long-sentence":
+			if lang.Overlaps(v.StartIndex, v.EndIndex, suppress, lang.KindHeading) {
+				continue
+			}
+			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindTableCell) >= 2 {
 				continue
 			}
 		case "staccato-burst":
 			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindListItem) >= 2 {
+				continue
+			}
+			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindTableCell) >= 2 {
+				continue
+			}
+		case "double-negative":
+			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindTableCell) >= 2 {
 				continue
 			}
 		case "long-paragraph":
@@ -49,6 +69,9 @@ func ApplySuppressions(vs []types.Violation, suppress []lang.Range, original str
 				continue
 			}
 			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindListItem) >= 2 {
+				continue
+			}
+			if lang.CountOverlapping(v.StartIndex, v.EndIndex, suppress, lang.KindTableCell) >= 2 {
 				continue
 			}
 		}
