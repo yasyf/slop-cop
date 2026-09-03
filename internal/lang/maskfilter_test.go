@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/yasyf/slop-cop/internal/lang"
+	"github.com/yasyf/slop-cop/internal/rules"
 	"github.com/yasyf/slop-cop/internal/types"
 )
 
@@ -34,5 +35,21 @@ func TestDropMaskMatchesDropsFillerOnlyHits(t *testing.T) {
 	vs = []types.Violation{{RuleID: "parenthetical-qualifier", StartIndex: 29, EndIndex: 56}}
 	if out := lang.DropMaskMatches(vs, nil, prose); len(out) != 1 {
 		t.Fatalf("prose parenthetical should survive; got %+v", out)
+	}
+}
+
+// TestDeterministicReadsRequiresLLMNotTheTier pins the predicate against the
+// stray tier `false-range` carries: it runs client-side, so the filter must
+// test it like any other detector rule. Keying off LLMTier exempted it.
+func TestDeterministicReadsRequiresLLMNotTheTier(t *testing.T) {
+	r, ok := rules.ByID["false-range"]
+	if !ok || r.RequiresLLM || r.LLMTier == "" {
+		t.Fatalf("fixture assumption gone: false-range = %+v", r)
+	}
+	original := "The problem ranges from trivial <!-- an aside --> to catastrophic.\n"
+	spans := []lang.Range{{Start: 32, End: 49, Kind: lang.KindMasked}}
+	vs := []types.Violation{{RuleID: "false-range", StartIndex: 0, EndIndex: 20}}
+	if out := lang.DropMaskMatches(vs, spans, original); len(out) != 0 {
+		t.Fatalf("false-range must be filtered like any client-side rule; got %+v", out)
 	}
 }
