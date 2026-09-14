@@ -22,11 +22,11 @@ set -eu
 # and its checksums.txt sha256 values for binrun_<version>_<os>_<arch>.tar.gz.
 # Bump all five together when adopting a newer binrun.
 RUNNER_REPO="yasyf/binrun"
-RUNNER_TAG="v0.4.0"
-RUNNER_SHA_darwin_arm64="6bec07bf776182fcd35e5d7d108d47907c9b0bb49d4214de46d1de6e74f45b4a"
-RUNNER_SHA_darwin_amd64="9f2ee46636dc816e76f59edb9ad5749c897173ff5dd177a5824845b25e669462"
-RUNNER_SHA_linux_amd64="f32d0e58e03fdc1387e5291bf60324a616ef9c4d96bebb403500cd365c107b36"
-RUNNER_SHA_linux_arm64="42e412c99a68931816ace3cf2e0e00388b402b820c81889f0c905451a5a6fdf3"
+RUNNER_TAG="v0.6.0"
+RUNNER_SHA_darwin_arm64="c725e8f7ab263517aeb77e70e842b3282f7953fe84437c59f22d5593d0ae79f5"
+RUNNER_SHA_darwin_amd64="36659d1beb73b2151c9008fedea072943c4d7a55cdf396a9a4cbcd3473539ce2"
+RUNNER_SHA_linux_amd64="6259d28fa39851fef70086374fe7873ed6175214647029cfa11bf0062cb680bf"
+RUNNER_SHA_linux_arm64="83b7777fdc70244fef513569bdbdf5bef12645e6f1f1533833d0867564fe25ef"
 # ------------------------------------------------------------------------------
 
 # ${0%/*}, not dirname: skips an exec an endpoint-security agent can serialize fleet-wide.
