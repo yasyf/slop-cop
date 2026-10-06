@@ -45,8 +45,8 @@ At ~50 tool calls, a delegate stops and hands off rather than pressing on: it re
 
 ## Worker model defaults
 
-Fable is local only, for top-level root orchestrators or extremely sensitive
-implementation, using the Mac's existing interactive authentication. Ordinary
+Roots run Opus 5.5. Fable is for exceptional cases only: the most sensitive
+local implementation, using the Mac's existing interactive authentication. Ordinary
 Claude workers and subdesks use Opus or Sonnet per the routing table; Opus is the
 default for Claude implementation workers. Auth, migrations, concurrency, or error-prone code
 alone does not qualify for Fable. Preserve explicitly requested models and
@@ -54,7 +54,7 @@ effort within these roles. Never use Fable as a general fallback or set
 `fallbackModel`.
 
 Set the model explicitly on worker definitions or dispatches so ordinary
-workers do not inherit Fable from a root orchestrator.
+workers never inherit Fable.
 
 ## Writing Plans
 
@@ -63,7 +63,7 @@ When you write a plan — in plan mode, or any "here's what I'll do" before you 
 - **Context** — why this change: the problem or need, what prompted it, the intended outcome.
 - **Approach** — the recommended approach only (not every alternative you weighed), as ordered steps. Name the critical files to touch; for a pattern repeated across many files, describe it once with a few representative paths instead of listing them all. Cite existing utilities/patterns you'll reuse, with their paths.
 - **Potential Pitfalls** — the sharp edges specific to this work: ordering constraints, code that looks safe to change but isn't, prior art that must not be "fixed", state that diverges from how it's described. One bullet each — front-load the gotchas you'd otherwise hit mid-implementation.
-- **Workflow Plan** — required in every plan; a plan without it is incomplete. One line on what the main agent alone does (track state, dispatch, decide, report), then a `Phase | Shape | Agents | Blocks on | Verification` table covering every fan-out the plan anticipates: Shape is `pipeline` / `parallel` / `loop`; Agents names each phase's model and effort per the Models table (e.g. `opus xhigh ×4`, `gpt-6-astra via codex-wrapper ×2`, `sonnet low → codex`); Blocks on names the upstream phase(s) whose output this phase consumes, `—` when it consumes none; Verification names the check that gates each phase's output. The table is the schedule's dependency graph, and ready rows dispatch together within the host budget, phases without an edge between them may run concurrently, and an edge exists only where a named artifact or verdict is consumed — a plan that sequences phases on anything vaguer is incomplete. Speculative lanes are rows of their own — marked `(speculative)`, `Blocks on —`, worktree-isolated, the verdict that lands or discards them named in their Verification cell (CLAUDE.md § Plan Execution & Orchestration). When nothing fans out, one line saying everything stays at the main-agent level replaces the table.
+- **Workflow Plan** — required in every plan; a plan without it is incomplete. One line on what the main agent alone does (track state, dispatch, decide, report), then a `Phase | Shape | Agents | Blocks on | Verification` table covering every fan-out the plan anticipates: Shape is `pipeline` / `parallel` / `loop`; Agents names each phase's model and effort per the Models table (e.g. `opus xhigh ×4`, `gpt-6.1-sol via codex-wrapper ×2`, `sonnet low → codex`); Blocks on names the upstream phase(s) whose output this phase consumes, `—` when it consumes none; Verification names the check that gates each phase's output. The table is the schedule's dependency graph, and ready rows dispatch together within the host budget, phases without an edge between them may run concurrently, and an edge exists only where a named artifact or verdict is consumed — a plan that sequences phases on anything vaguer is incomplete. Speculative lanes are rows of their own — marked `(speculative)`, `Blocks on —`, worktree-isolated, the verdict that lands or discards them named in their Verification cell (CLAUDE.md § Plan Execution & Orchestration). When nothing fans out, one line saying everything stays at the main-agent level replaces the table.
 - **Verification** — how to prove it works end to end: the exact commands to run, tests to add, and behavior to observe.
 
 ## Compact Context (ccx)
