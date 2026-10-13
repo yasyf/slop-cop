@@ -37,6 +37,12 @@ func runPlainify(t *testing.T, args ...string) (string, error) {
 	return string(out), runErr
 }
 
+// shQuote renders s as a single-quoted shell word, so a stub can carry a JSON
+// payload in its own body.
+func shQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // claudeReplying puts a claude stub on an otherwise-empty $PATH that answers
 // every call with the same rewrite, and returns the path it logs each call's
 // arguments to.
@@ -58,13 +64,14 @@ func claudeReplying(t *testing.T, plain string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response := filepath.Join(dir, "response.json")
-	//nolint:gosec // G306: a fixture in a test-owned temp dir.
-	if err := os.WriteFile(response, raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
 	argsLog := filepath.Join(dir, "args")
-	script := fmt.Sprintf("#!/bin/sh\n/bin/cat > /dev/null\nprintf '%%s\\n' \"$*\" >> %q\nexec /bin/cat %q\n", argsLog, response)
+	// The stub runs on shell builtins alone: spawning cat costs a second
+	// execve per call, which under the endpoint-security agents that inspect
+	// every exec on a Mac is ~0.3s rather than microseconds.
+	script := fmt.Sprintf(
+		"#!/bin/sh\nwhile IFS= read -r line; do :; done\nprintf '%%s\\n' \"$*\" >> %q\nprintf '%%s' %s\n",
+		argsLog, shQuote(string(raw)),
+	)
 	bin := t.TempDir()
 	//nolint:gosec // G306: an executable stub on a test-owned temp PATH.
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
