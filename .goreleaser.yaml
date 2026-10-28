@@ -81,8 +81,10 @@ homebrew_casks:
     # dialog, before dyld runs — no headless agent can answer it.
     hooks:
       post:
-        install: |
-          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/slop-cop"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/slop-cop"]
+          end
     repository:
       owner: yasyf
       name: homebrew-tap
