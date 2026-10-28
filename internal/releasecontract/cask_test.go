@@ -44,10 +44,11 @@ func TestCaskInstallHookClearsQuarantine(t *testing.T) {
 	for _, required := range []string{
 		"hooks:",
 		"post:",
-		"install:",
-		`system_command "/usr/bin/xattr"`,
+		"install_steps:",
+		"on_macos do",
+		`run "/usr/bin/xattr"`,
 		`"-dr", "com.apple.quarantine"`,
-		"#{staged_path}/slop-cop",
+		"{{ .StagedPath }}/slop-cop",
 	} {
 		if !strings.Contains(cask, required) {
 			t.Errorf("cask missing %q", required)
