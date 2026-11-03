@@ -217,6 +217,9 @@ func TestDetectColonElaboration(t *testing.T) {
 		{"simple elaboration", "The solution is simple: we need to change how we approach the fundamental problem at its root.", true},
 		{"answer simple", "The answer is simple: we need to rethink our approach from the ground up.", true},
 		{"there is one problem", "There is one problem: the data does not support the conclusion we reached.", true},
+		{"clock time before a period", "The window went red at 5:18 PM. The next one came back clear about an hour later.", false},
+		{"clock time inside a sentence", "The window went red at 5:18 PM and the next one came back clear about an hour later.", false},
+		{"real colon after a clock time", "The window went red at 5:18 PM: the next one came back clear about an hour later.", true},
 	})
 	t.Run("does not flag a colon in a short list item", func(_ *testing.T) {
 		// Short setup clause below the 5/20 char thresholds — must not crash.
