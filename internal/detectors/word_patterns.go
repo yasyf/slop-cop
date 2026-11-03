@@ -133,6 +133,7 @@ var (
 	reBroaderImplication = regexp.MustCompile(`(?i)\b(broader\s+implications?|wider\s+implications?|implications?\s+(for|of|on)\s+the\s+(broader|wider|larger))\b`)
 	reDash               = regexp.MustCompile(`[\x{2014}\x{2013}]`)
 	reColonElab          = regexp.MustCompile(`[^.!?\n]{5,50}:[^:\n]{20,}`)
+	reDigitColonDigit    = regexp.MustCompile(`\d:\d`)
 	reParenQualifier     = regexp.MustCompile(`\([^)]{20,}\)`)
 	reServesAs           = regexp.MustCompile(`(?i)\b(serves|stands|acts|functions)\s+as\b`)
 	reImagineWorld       = regexp.MustCompile(`(?i)\bImagine\s+(a world|if you|what would|a future)`)
@@ -331,8 +332,11 @@ func DetectNegationPivot(text string) []types.Violation {
 // DetectColonElaboration reports occurrences of the "colon-elaboration" prose pattern in text.
 func DetectColonElaboration(text string) []types.Violation {
 	var out []types.Violation
-	for _, idx := range reColonElab.FindAllStringIndex(text, -1) {
-		colonPos := strings.Index(text[idx[0]:idx[1]], ":")
+	prose := reDigitColonDigit.ReplaceAllStringFunc(text, func(m string) string {
+		return strings.Replace(m, ":", ";", 1)
+	})
+	for _, idx := range reColonElab.FindAllStringIndex(prose, -1) {
+		colonPos := strings.Index(prose[idx[0]:idx[1]], ":")
 		if colonPos < 0 {
 			continue
 		}
