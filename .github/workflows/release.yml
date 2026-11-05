@@ -4,6 +4,7 @@ name: Release
 # with zig, codesigns Darwin binaries, and publishes the cask.
 
 on:
+  workflow_dispatch:
   push:
     tags: ["v*"]
 
