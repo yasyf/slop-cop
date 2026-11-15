@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-// writePlainResponse renders one captured-shape `claude -p --output-format
-// json` reply — the stream array whose terminal type=="result" element carries
-// the schema payload — for a given rewrite.
-func writePlainResponse(t *testing.T, path, plain string) {
+// plainResponse renders one captured-shape `claude -p --output-format json`
+// reply — the stream array whose terminal type=="result" element carries the
+// schema payload — for a given rewrite.
+func plainResponse(t *testing.T, plain string) string {
 	t.Helper()
 	payload, err := json.Marshal(plainifyEnvelope{Plain: plain})
 	if err != nil {
@@ -36,10 +36,7 @@ func writePlainResponse(t *testing.T, path, plain string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//nolint:gosec // G306: a fixture in a test-owned temp dir.
-	if err := os.WriteFile(path, raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	return string(raw)
 }
 
 // fakeClaudeSequence puts a claude stub on an otherwise-empty $PATH that
@@ -48,27 +45,23 @@ func writePlainResponse(t *testing.T, path, plain string) {
 // attempt was given.
 func fakeClaudeSequence(t *testing.T, plains ...string) string {
 	t.Helper()
-	dir := t.TempDir()
+	state := t.TempDir()
+	counter := filepath.Join(state, "calls")
+	argsLog := filepath.Join(state, "args")
+
+	var arms strings.Builder
 	for i, plain := range plains {
-		writePlainResponse(t, filepath.Join(dir, fmt.Sprintf("%d.json", i+1)), plain)
+		fmt.Fprintf(&arms, "\t%d) %s ;;\n", i+1, printPayload(plainResponse(t, plain)))
 	}
-	counter := filepath.Join(dir, "calls")
-	argsLog := filepath.Join(dir, "args")
-	script := fmt.Sprintf(`#!/bin/sh
-/bin/cat > /dev/null
-printf '%%s\n' "$*" >> %[1]q
+	writeStub(t, "claude", fmt.Sprintf(`%[1]sprintf '%%s\n' "$*" >> %[2]q
 n=0
-if [ -f %[2]q ]; then n=$(/bin/cat %[2]q); fi
+if [ -f %[3]q ]; then read -r n < %[3]q; fi
 n=$((n+1))
-printf '%%s' "$n" > %[2]q
-exec /bin/cat %[3]q/"$n".json
-`, argsLog, counter, dir)
-	bin := t.TempDir()
-	//nolint:gosec // G306: an executable stub on a test-owned temp PATH.
-	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake claude: %v", err)
-	}
-	t.Setenv("PATH", bin)
+printf '%%s\n' "$n" > %[3]q
+case "$n" in
+%[4]s	*) exit 1 ;;
+esac
+`, drainStdin, argsLog, counter, arms.String()))
 	return argsLog
 }
 
@@ -200,24 +193,18 @@ func TestPlainifyLeavesAMetRewriteAlone(t *testing.T) {
 // mapped to the empty rewrite exits 1 instead.
 func fakeClaudeByMarker(t *testing.T, markers []string, fail string) {
 	t.Helper()
-	dir := t.TempDir()
 	var arms strings.Builder
 	for i, marker := range markers {
 		if marker == fail {
 			fmt.Fprintf(&arms, "  *%s*) exit 1 ;;\n", marker)
 			continue
 		}
-		writePlainResponse(t, filepath.Join(dir, marker+".json"), "plain "+marker)
 		delay := float64(len(markers)-i) / 20.0
-		fmt.Fprintf(&arms, "  *%s*) /bin/sleep %.2f; exec /bin/cat %q ;;\n", marker, delay, filepath.Join(dir, marker+".json"))
+		fmt.Fprintf(&arms, "  *%s*) /bin/sleep %.2f; %s ;;\n", marker, delay, printPayload(plainResponse(t, "plain "+marker)))
 	}
-	script := "#!/bin/sh\nbody=$(/bin/cat)\ncase \"$body\" in\n" + arms.String() + "esac\nexit 1\n"
-	bin := t.TempDir()
-	//nolint:gosec // G306: an executable stub on a test-owned temp PATH.
-	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin)
+	writeStub(t, "claude", "body=\n"+
+		"while IFS= read -r line || [ -n \"$line\" ]; do body=\"$body$line\"; done\n"+
+		"case \"$body\" in\n"+arms.String()+"  *) exit 1 ;;\nesac\n")
 }
 
 func markerEntries(markers []string) []PlainEntry {
